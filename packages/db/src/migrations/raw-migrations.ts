@@ -73,6 +73,7 @@ export const SCHEMA_MIGRATIONS = [
   "0063_default_staff.sql",
   "0064_booking_mode.sql",
   "0065_finance_billed_voice_seconds.sql",
+  "0066_public_api.sql",
   "0067_receptionists.sql",
 ] as const;
 

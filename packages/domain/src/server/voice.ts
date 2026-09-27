@@ -90,6 +90,8 @@ export async function startCall(
     prospectDemoId?: string;
     maxDurationMs?: number;
     billable?: boolean;
+    /** The receptionist answering. Omitted means the business's default receptionist. */
+    agentId?: string;
   },
 ): Promise<{ callId: string; conversationId: string; contactId: string; duplicate: boolean; blocked: boolean; webCallMaxDurationMs?: number }> {
   const result = await withBusinessTransaction(context.db, { businessId: input.businessId, actorType: "worker" }, async (tx) => {
@@ -105,7 +107,7 @@ export async function startCall(
       throw new Error("Call contact could not be created.");
     }
     const blocked = Boolean(existingContacts[0]?.operatorBlockedAt);
-    const conversationId = existing[0]?.conversationId ?? (await tx.insert(conversations).values({ businessId: input.businessId, contactId, channel: "voice", status: "open", automationState: "ai_active" }).returning({ id: conversations.id }))[0]?.id;
+    const conversationId = existing[0]?.conversationId ?? (await tx.insert(conversations).values({ businessId: input.businessId, contactId, channel: "voice", status: "open", automationState: "ai_active", ...(input.agentId ? { agentId: input.agentId } : {}) }).returning({ id: conversations.id }))[0]?.id;
     if (!conversationId) {
       throw new Error("Call conversation could not be created.");
     }
@@ -116,6 +118,7 @@ export async function startCall(
       provider: input.provider,
       providerCallId: input.providerCallId,
       transport: input.transport,
+      ...(input.agentId ? { agentId: input.agentId } : {}),
       ...(input.originUrl !== undefined ? { originUrl: input.originUrl } : {}),
       ...(input.userAgent !== undefined ? { userAgent: input.userAgent } : {}),
       ...(input.widgetId !== undefined ? { widgetId: input.widgetId } : {}),

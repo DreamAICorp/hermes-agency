@@ -193,7 +193,9 @@ async function main(): Promise<void> {
           select role_name, function_name
           from (values
             ('lobbystack_app', 'app.resolve_business_by_widget_key(text)'),
-            ('lobbystack_worker', 'app.resolve_business_by_widget_key(text)')
+            ('lobbystack_worker', 'app.resolve_business_by_widget_key(text)'),
+            ('lobbystack_app', 'app.resolve_phone_route(text)'),
+            ('lobbystack_worker', 'app.resolve_phone_route(text)')
           ) as expected(role_name, function_name)
           where not has_function_privilege(expected.role_name, expected.function_name, 'EXECUTE')
         `);
@@ -363,6 +365,26 @@ async function verifyRlsBehavior(client: ReturnType<typeof createDatabaseClient>
         (${ids.business_b}::uuid, 'RLS Service B', ${`rls-service-b-${ids.business_b}`}, 30)
     `);
 
+    const receptionists = (await tx.execute<{ agent_a: string; agent_b: string }>(sql`
+      select
+        (select id from public.agents where business_id = ${ids.business_a}::uuid and is_default) as agent_a,
+        (select id from public.agents where business_id = ${ids.business_b}::uuid and is_default) as agent_b
+    `)).rows[0];
+    if (!receptionists?.agent_a || !receptionists.agent_b) {
+      // Businesses inserted directly get their default receptionist lazily.
+      await tx.execute(sql`
+        insert into public.conversations (business_id, channel)
+        values (${ids.business_a}::uuid, 'sms'), (${ids.business_b}::uuid, 'sms')
+      `);
+    }
+    await tx.execute(sql`
+      insert into public.agent_service_opt_outs (business_id, agent_id, service_id)
+      select service.business_id, agent.id, service.id
+      from public.services service
+      join public.agents agent on agent.business_id = service.business_id and agent.is_default
+      where service.business_id in (${ids.business_a}::uuid, ${ids.business_b}::uuid)
+    `);
+
     try {
       await tx.execute(sql.raw("set local role lobbystack_app"));
       await tx.execute(sql`select set_config('app.business_id', ${ids.business_a}, true)`);
@@ -372,6 +394,28 @@ async function verifyRlsBehavior(client: ReturnType<typeof createDatabaseClient>
       const foreignServices = (await tx.execute<{ count: string }>(sql`select count(*)::text as count from public.services where business_id = ${ids.business_b}::uuid`)).rows[0]?.count;
       if (ownBusiness !== "1" || foreignServices !== "0") {
         throw new Error(`RLS visibility check failed for app role (own=${ownBusiness ?? "missing"}, foreign=${foreignServices ?? "missing"}).`);
+      }
+      // Receptionists and their opt-outs follow the same tenant boundary.
+      const receptionistVisibility = (await tx.execute<{ own: string; foreign: string; own_opt_outs: string; foreign_opt_outs: string }>(sql`
+        select
+          (select count(*)::text from public.agents where business_id = ${ids.business_a}::uuid) as own,
+          (select count(*)::text from public.agents where business_id = ${ids.business_b}::uuid) as foreign,
+          (select count(*)::text from public.agent_service_opt_outs where business_id = ${ids.business_a}::uuid) as own_opt_outs,
+          (select count(*)::text from public.agent_service_opt_outs where business_id = ${ids.business_b}::uuid) as foreign_opt_outs
+      `)).rows[0];
+      if (receptionistVisibility?.own !== "1" || receptionistVisibility.foreign !== "0" || receptionistVisibility.own_opt_outs !== "1" || receptionistVisibility.foreign_opt_outs !== "0") {
+        throw new Error(`RLS receptionist check failed (${JSON.stringify(receptionistVisibility ?? {})}).`);
+      }
+      await tx.execute(sql`savepoint receptionist_cross_tenant_write`);
+      let crossTenantWriteBlocked = false;
+      try {
+        await tx.execute(sql`insert into public.agents (business_id, name, greeting, tone, summary, booking_policy) values (${ids.business_b}::uuid, 'Intruder', 'g', 't', 's', 'b')`);
+      } catch {
+        crossTenantWriteBlocked = true;
+      }
+      await tx.execute(sql`rollback to savepoint receptionist_cross_tenant_write`);
+      if (!crossTenantWriteBlocked) {
+        throw new Error("RLS receptionist write check failed: an operator created a receptionist for another business.");
       }
 
       await tx.execute(sql`select set_config('app.business_id', ${ids.business_b}, true)`);

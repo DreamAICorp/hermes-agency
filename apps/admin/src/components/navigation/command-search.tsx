@@ -23,6 +23,8 @@ const SETTINGS_PAGES = [
   { key: "appearance", href: "/settings/appearance" },
   { key: "notifications", href: "/settings/notifications" },
   { key: "account", href: "/settings/account" },
+  { key: "apiKeys", href: "/settings/api-keys" },
+  { key: "webhooks", href: "/integrations/webhooks" },
 ] as const;
 
 /** Every page and receptionist page the search can jump to. */

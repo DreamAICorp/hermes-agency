@@ -46,7 +46,9 @@
       "business": "Settings: Business and team",
       "appearance": "Settings: Appearance",
       "notifications": "Settings: Notifications",
-      "account": "Settings: Your account"
+      "account": "Settings: Your account",
+      "apiKeys": "Settings: API keys",
+      "webhooks": "Integrations: Webhooks"
     }
   },
   "save": {

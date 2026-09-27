@@ -37,7 +37,8 @@
     "/receptionists/[agentId]/knowledge",
     "/receptionists/[agentId]/booking",
     "/receptionists/[agentId]/transfers",
-    "/receptionists/[agentId]/numbers"
+    "/receptionists/[agentId]/numbers",
+    "/receptionists/new"
   ],
   "localizedPortRoutes": [
     "/[locale]/accept-invite",
@@ -1437,6 +1438,13 @@
     },
     {
       "path": "/receptionists/[agentId]/numbers",
+      "fixtureState": "operator",
+      "state": "default",
+      "comparison": "excluded",
+      "reason": "New navigation behind the new_navigation flag, with no legacy page to compare"
+    },
+    {
+      "path": "/receptionists/new",
       "fixtureState": "operator",
       "state": "default",
       "comparison": "excluded",

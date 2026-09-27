@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,6 +17,9 @@ import { requestJson } from "@/lib/request-json";
 import { itemUsedBy, receptionistUsesItem } from "@/lib/receptionist-usage";
 import { ReceptionistPage, receptionistsQueryKey, SaveRow, useReceptionist, useReceptionistsOverview, useSaveReceptionist, type ReceptionistSettings } from "./receptionist-page";
 import { SharedToggleList } from "./shared-toggle-list";
+import { staffQueryKey } from "./staff-surface";
+import { Button } from "@/components/ui/button";
+import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 
 type BookingValues = { bookingMode: BookingMode; allowCancel: boolean; allowReschedule: boolean; requireOtp: boolean };
 type Service = { id: string; name: string; durationMinutes: number; description: string | null; active: boolean };
@@ -30,7 +34,7 @@ function valuesFrom(profile: ReceptionistSettings): BookingValues {
 }
 
 /** Booking mode, appointment changes, and which services this receptionist can book. */
-export function ReceptionistBookingSurface({ agentId, staffSection }: { agentId: string; staffSection?: React.ReactNode }) {
+export function ReceptionistBookingSurface({ agentId }: { agentId: string }) {
   const { t } = useTranslation("receptionists");
   const navigation = useNavigationSnapshot();
   const queryClient = useQueryClient();
@@ -120,8 +124,38 @@ export function ReceptionistBookingSurface({ agentId, staffSection }: { agentId:
             title={t("booking.servicesTitle")}
           />
         )}
-        {staffSection}
+        {navigation?.staffEnabled ? <BookingStaffSection /> : null}
       </div>
     </ReceptionistPage>
+  );
+}
+
+/** With staff on, who this receptionist can book with. Staff are shared by every receptionist. */
+function BookingStaffSection() {
+  const { t } = useTranslation("receptionists");
+  const navigation = useNavigationSnapshot();
+  const businessId = navigation?.businessId;
+  const staff = useQuery({ queryKey: staffQueryKey(businessId), enabled: Boolean(businessId), queryFn: () => requestJson<{ staff: Array<{ id: string; name: string; active: boolean; serviceIds: string[] }> }>(`/api/staff?businessId=${encodeURIComponent(businessId!)}`) });
+  const members = (staff.data?.staff ?? []).filter((member) => member.active);
+  return (
+    <section className="flex flex-col gap-3" data-testid="booking-staff">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-heading text-sm leading-snug font-medium">{t("booking.staffTitle")}</h2>
+          <p className="text-sm text-muted-foreground">{t("booking.staffDescription")}</p>
+        </div>
+        <Button nativeButton={false} render={<Link href="/staff" />} size="sm" variant="outline">{t("booking.manageStaff")}</Button>
+      </div>
+      <Surface className="flex flex-col">
+        {staff.isLoading ? <Skeleton className="h-16 w-full rounded-xl" /> : members.map((member) => (
+          <Item className="rounded-none border-x-0 border-t-0 border-b border-border last:border-b-0" key={member.id} variant="default">
+            <ItemContent>
+              <ItemTitle className="ph-mask">{member.name}</ItemTitle>
+              <ItemDescription>{t("staff.services", { count: member.serviceIds.length })}</ItemDescription>
+            </ItemContent>
+          </Item>
+        ))}
+      </Surface>
+    </section>
   );
 }

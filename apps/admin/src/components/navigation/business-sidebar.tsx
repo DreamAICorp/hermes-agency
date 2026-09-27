@@ -171,7 +171,7 @@ function SearchButton() {
 
 function BusinessItems({ navigation, pathname }: { navigation: NavigationSnapshot; pathname: string }) {
   const { t } = useTranslation("receptionists");
-  const model = buildSidebarModel({ receptionists: navigation.receptionists, staffEnabled: navigation.staffEnabled, canCreateReceptionists: false });
+  const model = buildSidebarModel({ receptionists: navigation.receptionists, staffEnabled: navigation.staffEnabled, canCreateReceptionists: navigation.canManage });
   const chevron = <ChevronRight className="ml-auto size-4 text-muted-foreground" />;
   return (
     <>

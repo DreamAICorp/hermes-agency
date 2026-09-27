@@ -143,7 +143,10 @@
     "servicesTitle": "Services this receptionist can book",
     "servicesDescription": "Turn off services this receptionist shouldn't book.",
     "servicesEmpty": "Your business has no services yet. Add some under Services.",
-    "manageServices": "Edit services"
+    "manageServices": "Edit services",
+    "staffTitle": "Staff",
+    "staffDescription": "Your whole team takes bookings from every receptionist.",
+    "manageStaff": "Manage staff"
   },
   "transfers": {
     "description": "When this receptionist passes a call to a person, and the rules it follows.",
@@ -191,13 +194,111 @@
     "testCall": "Test call"
   },
   "inbox": {
-    "tabs": {
-      "calls": "Calls",
-      "chats": "Chats and texts"
-    }
+    "channelFilter": "Show",
+    "channels": {
+      "all": "All",
+      "call": "Calls",
+      "chat": "Website chats",
+      "text": "Texts"
+    },
+    "search": "Search names, numbers and messages",
+    "receptionistFilter": "Receptionist",
+    "allReceptionists": "All receptionists",
+    "empty": "Nothing here yet. Calls, website chats and texts will show up here.",
+    "unknownContact": "Unknown caller",
+    "noPreview": {
+      "call": "No summary for this call yet.",
+      "chat": "No messages yet.",
+      "text": "No messages yet."
+    },
+    "channelLabels": {
+      "call": "Call",
+      "chat": "Website chat",
+      "text": "Text"
+    },
+    "select": "Choose a conversation to read it.",
+    "back": "Back to the list",
+    "answeredBy": "{{channel}} answered by {{name}}",
+    "takeOver": "Take over",
+    "resume": "Let the receptionist answer",
+    "tookOver": "You're answering this chat now",
+    "resumed": "The receptionist is answering this chat again",
+    "openCall": "Open call details",
+    "reply": "Reply",
+    "replyChat": "Reply to the visitor",
+    "replyText": "Reply by text",
+    "send": "Send",
+    "sent": "Reply sent",
+    "sendFailed": "We couldn't send your reply. Try again."
   },
   "numbersPage": {
     "phoneTitle": "Phone number",
     "widgetTitle": "Website widget"
+  },
+  "calendar": {
+    "previous": "Previous",
+    "next": "Next",
+    "today": "Today",
+    "view": "Calendar view",
+    "views": {
+      "day": "Day",
+      "week": "Week"
+    },
+    "empty": "No appointments in this period."
+  },
+  "staff": {
+    "description": "The people appointments are booked with. Every receptionist books with the same team.",
+    "nameLabel": "Name",
+    "namePlaceholder": "Add a team member, for example Dr. Lee",
+    "add": "Add",
+    "added": "{{name}} added to your team",
+    "turnedOn": "{{name}} takes bookings again",
+    "turnedOff": "{{name}} no longer takes bookings",
+    "services_one": "Offers {{count}} service",
+    "services_other": "Offers {{count}} services",
+    "off": "Doesn't take bookings",
+    "activeLabel": "{{name}} takes bookings",
+    "enabled": "Staff turned on. You'll find Staff in the sidebar.",
+    "disabled": "Staff turned off. Bookings keep working.",
+    "toggleLabel": "Manage staff",
+    "toggleHint": "Book appointments with specific team members and see one column per person in Calendar. When it's off, bookings go to the business."
+  },
+  "create": {
+    "title": "New receptionist",
+    "nameHint": "Only you and your team see this name. For example After hours or Spanish line.",
+    "namePlaceholder": "After hours",
+    "copyLabel": "Start from",
+    "copyHint": "The new receptionist starts with this one's greeting, instructions, booking and transfer settings.",
+    "afterHint": "It uses all your knowledge and services. It won't answer calls until you give it a number or the website widget under Numbers and widget.",
+    "cancel": "Cancel",
+    "creating": "Creating",
+    "submit": "Create receptionist",
+    "created": "{{name}} created"
+  },
+  "delete": {
+    "title": "Delete receptionist",
+    "hint": "Its numbers and website widget move to another receptionist. Past calls and chats stay in the Inbox.",
+    "lastOne": "Your business needs at least one receptionist, so you can't delete this one.",
+    "button": "Delete {{name}}",
+    "confirmTitle": "Delete {{name}}?",
+    "moves_one": "This item moves to {{name}}:",
+    "moves_other": "These {{count}} items move to {{name}}:",
+    "nothingMoves": "No number or widget goes to this receptionist, so nothing else changes.",
+    "successorLabel": "Move them to",
+    "history": "Past calls and chats stay in the Inbox. You can't undo this.",
+    "confirm": "Delete {{name}}",
+    "deleted": "{{name}} deleted"
+  },
+  "routing": {
+    "title": "Who answers",
+    "description": "Choose which receptionist answers each number and the website widget.",
+    "empty": "You don't have a number or website widget yet.",
+    "answeredBy": "Answered by {{name}}",
+    "answeredByFor": "Receptionist for {{route}}",
+    "confirmTitle": "Change who answers?",
+    "confirmPhone": "Calls and texts to {{route}} will go to {{to}} instead of {{from}}.",
+    "confirmWidget": "Chats and calls from {{route}} will go to {{to}} instead of {{from}}.",
+    "confirm": "Change",
+    "saved": "{{name}} now answers {{route}}"
   }
 }

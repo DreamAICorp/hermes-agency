@@ -17,6 +17,7 @@ export async function GET(request: Request) {
       return {
         businessId,
         businessName: navigation.businessName,
+        timezone: navigation.timezone,
         newNavigation: isNewNavigationEnabled(navigation.featureFlags),
         staffEnabled: navigation.staffEnabled,
         canManage: ["business_owner", "business_admin"].includes(navigation.role),

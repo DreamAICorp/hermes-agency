@@ -40,6 +40,7 @@ TESTS=(
   e2e/performance-startup.e2e.ts
   e2e/supported-journeys.e2e.ts
   e2e/navigation.e2e.ts
+  e2e/receptionists.e2e.ts
 )
 
 while [[ $# -gt 0 ]]; do

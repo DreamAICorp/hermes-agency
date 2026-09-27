@@ -414,6 +414,7 @@ export async function setReceptionistService(
 export type WorkspaceNavigation = {
   businessId: string;
   businessName: string;
+  timezone: string;
   featureFlags: Record<string, boolean>;
   staffEnabled: boolean;
   role: string;
@@ -424,12 +425,13 @@ export type WorkspaceNavigation = {
 export async function getWorkspaceNavigation(context: DomainContext, input: { userId: string; businessId: string }): Promise<WorkspaceNavigation | null> {
   return await withBusinessTransaction(context.db, { ...input, actorType: "operator" }, async (tx) => {
     const membership = await requireBusinessMembership(tx, input);
-    const [business] = await tx.select({ name: businesses.name, featureFlags: businesses.featureFlags, staffEnabled: businesses.staffEnabled }).from(businesses).where(eq(businesses.id, input.businessId)).limit(1);
+    const [business] = await tx.select({ name: businesses.name, timezone: businesses.timezone, featureFlags: businesses.featureFlags, staffEnabled: businesses.staffEnabled }).from(businesses).where(eq(businesses.id, input.businessId)).limit(1);
     if (!business) return null;
     const rows = await listActiveReceptionists(tx, input.businessId);
     return {
       businessId: input.businessId,
       businessName: business.name,
+      timezone: business.timezone,
       featureFlags: business.featureFlags ?? {},
       staffEnabled: business.staffEnabled,
       role: membership.role,

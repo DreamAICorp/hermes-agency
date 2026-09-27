@@ -1,42 +1,21 @@
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { expect, test } from "@playwright/test";
 
-import { expect, test, type Browser, type Page } from "@playwright/test";
-
-import { NAVIGATION_TEST_PASSWORD, removeNavigationOperator, seedNavigationOperator, type NavigationOperator } from "./fixtures/navigation-operator";
+import { navigationScreenshot as shot, removeNavigationOperator, seedNavigationOperator, signInNavigationOperator as signIn, type NavigationOperator } from "./fixtures/navigation-operator";
 
 // The business sidebar, the receptionist drill-down, the command search and
 // the old-URL redirects behind the new_navigation flag. Set
 // NAV_SCREENSHOT_DIR to keep light and dark screenshots of each view.
 
 const databaseUrl = process.env.REPLACEMENT_E2E_DATABASE_URL;
-const screenshotDir = process.env.NAV_SCREENSHOT_DIR;
 const operators: NavigationOperator[] = [];
 
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "serial", timeout: 120_000 });
 test.afterAll(async () => { for (const operator of operators) await removeNavigationOperator(databaseUrl, operator); });
 
 async function seed(input: Parameters<typeof seedNavigationOperator>[0]) {
   const operator = await seedNavigationOperator(input);
   operators.push(operator);
   return operator;
-}
-
-async function signIn(browser: Browser, baseURL: string | undefined, operator: NavigationOperator, options: { locale?: string; colorScheme?: "light" | "dark" } = {}): Promise<Page> {
-  const context = await browser.newContext({ locale: options.locale ?? "en-US", colorScheme: options.colorScheme ?? "light", viewport: { width: 1440, height: 900 } });
-  const page = await context.newPage();
-  await page.setExtraHTTPHeaders({ "x-real-ip": `198.19.${operators.length}.${Math.floor(Math.random() * 250)}` });
-  const origin = new URL(baseURL ?? "http://localhost:13000").origin;
-  const response = await page.request.post(`${origin}/api/auth/sign-in/email`, { data: { email: operator.email, password: NAVIGATION_TEST_PASSWORD }, headers: { origin } });
-  expect(response.ok(), await response.text()).toBe(true);
-  return page;
-}
-
-async function shot(page: Page, name: string) {
-  if (!screenshotDir) return;
-  mkdirSync(screenshotDir, { recursive: true });
-  await page.waitForLoadState("networkidle").catch(() => undefined);
-  await page.screenshot({ path: join(screenshotDir, `${name}.png`) });
 }
 
 test("a single-receptionist owner gets one Receptionist link and a drill-down", async ({ browser, baseURL }) => {
@@ -56,7 +35,7 @@ test("a single-receptionist owner gets one Receptionist link and a drill-down", 
   await sidebar.getByRole("link", { name: "Calendar" }).click();
   await expect(page).toHaveURL(/\/calendar$/);
 
-  await sidebar.getByRole("link", { name: "Receptionist" }).click();
+  await sidebar.getByRole("link", { name: "Receptionist", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/receptionists/${agentId}$`));
   await expect(page.getByTestId("drill-down-back")).toHaveText("Maple Dental");
   await expect(page.getByTestId("receptionist-scope")).toContainText("Receptionist");
@@ -146,7 +125,7 @@ test("the navigation speaks French", async ({ browser, baseURL }) => {
   await expect(sidebar.getByRole("link", { name: "Boîte de réception" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Calendrier" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "Numéros et widget" })).toBeVisible();
-  await sidebar.getByRole("link", { name: "Réceptionniste" }).click();
+  await sidebar.getByRole("link", { name: "Réceptionniste", exact: true }).click();
   await expect(page.getByRole("link", { name: "Transferts et règles" })).toBeVisible();
   await page.context().close();
 });

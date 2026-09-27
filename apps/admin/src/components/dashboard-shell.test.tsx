@@ -59,7 +59,7 @@ describe("original shared navigation", () => {
   });
 });
 describe("new_navigation flag", () => {
-  const snapshot = { businessId: "business", businessName: "Tenant name", staffEnabled: false, canManage: true, receptionists: [{ id: "0b8a4c7e-3f1d-4a55-9d3e-2c1f0e9a7b61", name: "Front desk", isDefault: true }] };
+  const snapshot = { businessId: "business", businessName: "Tenant name", timezone: "America/Toronto", staffEnabled: false, canManage: true, receptionists: [{ id: "0b8a4c7e-3f1d-4a55-9d3e-2c1f0e9a7b61", name: "Front desk", isDefault: true }] };
   it("keeps the original sidebar while the flag is off", () => {
     setup("business_owner", { ...snapshot, newNavigation: false });
     const links = screen.getAllByRole("link").map(link => link.getAttribute("href"));

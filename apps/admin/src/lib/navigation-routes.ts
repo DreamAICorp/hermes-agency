@@ -11,6 +11,8 @@ export type NavigationReceptionist = { id: string; name: string; isDefault: bool
 export type NavigationSnapshot = {
   businessId: string;
   businessName: string;
+  /** IANA timezone the business works in; calendars use it. */
+  timezone: string;
   newNavigation: boolean;
   staffEnabled: boolean;
   canManage: boolean;

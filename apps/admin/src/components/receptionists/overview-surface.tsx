@@ -10,12 +10,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { startTestCall } from "@/lib/test-call-launcher";
 import { receptionistPath, type ReceptionistSection } from "@/lib/navigation-routes";
+import { useNavigationSnapshot } from "@/components/navigation/navigation-provider";
+import { DeleteReceptionistSection } from "./delete-receptionist";
 import { ReceptionistPage, useReceptionist, useReceptionistsOverview } from "./receptionist-page";
 
 /** A summary of the receptionist, with a test call in the page header. */
 export function ReceptionistOverviewSurface({ agentId }: { agentId: string }) {
   const { t } = useTranslation(["receptionists", "common"]);
   const query = useReceptionist(agentId);
+  const navigation = useNavigationSnapshot();
   const overview = useReceptionistsOverview();
   const profile = query.data?.profile;
   const summary = overview.data?.receptionists.find((receptionist) => receptionist.id === agentId);
@@ -34,6 +37,7 @@ export function ReceptionistOverviewSurface({ agentId }: { agentId: string }) {
       description={t("overview.description")}
       section="overview"
     >
+      <div className="flex flex-col gap-8">
       {!profile ? <Skeleton className="h-48 w-full rounded-xl" /> : (
         <div className="grid gap-4 md:grid-cols-2">
           {cards.map((card) => (
@@ -49,6 +53,8 @@ export function ReceptionistOverviewSurface({ agentId }: { agentId: string }) {
           ))}
         </div>
       )}
+      {(navigation?.receptionists.length ?? 0) > 1 ? <DeleteReceptionistSection agentId={agentId} /> : null}
+      </div>
     </ReceptionistPage>
   );
 }

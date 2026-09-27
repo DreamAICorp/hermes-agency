@@ -17,7 +17,7 @@ const front = { id: "0b8a4c7e-3f1d-4a55-9d3e-2c1f0e9a7b61", name: "Front desk", 
 const night = { id: "1c9b5d8f-4a2e-4b66-8e4f-3d2a1f0b8c72", name: "After hours", isDefault: false };
 
 function navigation(overrides: Partial<NavigationSnapshot> = {}): NavigationSnapshot {
-  return { businessId: "business", businessName: "Maple Dental", newNavigation: true, staffEnabled: false, canManage: true, receptionists: [front], ...overrides };
+  return { businessId: "business", businessName: "Maple Dental", timezone: "America/Toronto", newNavigation: true, staffEnabled: false, canManage: true, receptionists: [front], ...overrides };
 }
 
 function renderSidebar(snapshot: NavigationSnapshot) {
@@ -39,7 +39,7 @@ const hrefs = () => screen.getAllByRole("link").map((link) => link.getAttribute(
 describe("BusinessSidebar", () => {
   it("shows one Receptionist link and no list header for a single receptionist", () => {
     renderSidebar(navigation());
-    expect(hrefs()).toEqual(["/", "/inbox", "/calendar", "/contacts", "/analytics", `/receptionists/${front.id}`, "/services", "/knowledge", "/numbers", "/integrations", "/settings/usage"]);
+    expect(hrefs()).toEqual(["/", "/inbox", "/calendar", "/contacts", "/analytics", `/receptionists/${front.id}`, "/receptionists/new", "/services", "/knowledge", "/numbers", "/integrations", "/settings/usage"]);
     expect(screen.getByRole("link", { name: /nav\.receptionist$/ })).toBeTruthy();
     expect(screen.queryByText("nav.receptionists")).toBeNull();
     expect(screen.queryByText("Front desk")).toBeNull();
@@ -49,7 +49,12 @@ describe("BusinessSidebar", () => {
     renderSidebar(navigation({ receptionists: [front, night] }));
     const group = screen.getByTestId("sidebar-receptionists");
     expect(within(group).getByText("nav.receptionists")).toBeTruthy();
-    expect(within(group).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([`/receptionists/${front.id}`, `/receptionists/${night.id}`]);
+    expect(within(group).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([`/receptionists/${front.id}`, `/receptionists/${night.id}`, "/receptionists/new"]);
+  });
+
+  it("offers New receptionist only to people who can manage the business", () => {
+    renderSidebar(navigation({ canManage: false }));
+    expect(hrefs()).not.toContain("/receptionists/new");
   });
 
   it("shows Staff only when staff is turned on", () => {

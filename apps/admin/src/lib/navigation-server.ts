@@ -31,6 +31,7 @@ export const loadNavigationSnapshot = cache(async (): Promise<NavigationSnapshot
   return {
     businessId,
     businessName: navigation.businessName,
+    timezone: navigation.timezone,
     newNavigation: isNewNavigationEnabled(navigation.featureFlags),
     staffEnabled: navigation.staffEnabled,
     canManage: ["business_owner", "business_admin"].includes(navigation.role),

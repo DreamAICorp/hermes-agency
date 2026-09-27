@@ -166,6 +166,14 @@ Astro.response.headers.set("Content-Signal", CONTENT_SIGNAL)
     <script>
       const main = document.querySelector<HTMLElement>("#main-content")
       if (main) main.tabIndex = -1
+      // Menus built on <details> stay open until toggled, so close them when
+      // a press lands anywhere outside.
+      document.addEventListener("pointerdown", (event) => {
+        document.querySelectorAll<HTMLDetailsElement>("header details[open]").forEach((details) => {
+          const isTopLevel = !details.parentElement?.closest("details")
+          if (isTopLevel && !details.contains(event.target as Node)) details.open = false
+        })
+      })
       document.addEventListener("keydown", (event) => {
         if (event.key !== "Escape") return
         const details = (event.target as Element | null)?.closest<HTMLDetailsElement>("header details[open]")

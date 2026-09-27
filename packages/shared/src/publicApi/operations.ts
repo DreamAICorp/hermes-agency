@@ -64,9 +64,9 @@ export const apiOperations = {
   updateBusiness: { method: "PATCH", path: "/business", tag: "Business", summary: "Update the business", description: "Updates basic fields and opening hours. Sending hours replaces the whole week.", scope: "business:write", request: "BusinessUpdate", response: "Business", status: 200 },
   listServices: { method: "GET", path: "/services", tag: "Business", summary: "List services", description: "Lists the active services customers can book.", scope: "business:read", list: true, response: "Service", status: 200 },
   listStaff: { method: "GET", path: "/staff", tag: "Business", summary: "List staff", description: "Lists everyone who can take appointments, active or not. Pass an active staff id as staff_id to GET /availability, POST /appointments or reschedule.", scope: "business:read", list: true, response: "Staff", status: 200 },
-  listCalls: { method: "GET", path: "/calls", tag: "Calls", summary: "List calls", description: "Newest first.", scope: "calls:read", list: true, params: [...pageParams], response: "Call", status: 200 },
+  listCalls: { method: "GET", path: "/calls", tag: "Calls", summary: "List calls", description: "Newest first. Filter by start time to read one day or one week.", scope: "calls:read", list: true, params: [...pageParams, { name: "started_after", in: "query", description: "Only calls that started at or after this time.", schema: { type: "string", format: "date-time" } }, { name: "started_before", in: "query", description: "Only calls that started before this time.", schema: { type: "string", format: "date-time" } }], response: "Call", status: 200 },
   getCall: { method: "GET", path: "/calls/{call_id}", tag: "Calls", summary: "Get a call", description: "Includes the transcript.", scope: "calls:read", params: [idParam("call_id", "call")], response: "CallDetail", status: 200 },
-  listContacts: { method: "GET", path: "/contacts", tag: "Contacts", summary: "List contacts", description: "Newest first.", scope: "contacts:read", list: true, params: [...pageParams, { name: "phone", in: "query", description: "Only the contact with this E.164 phone number.", schema: { type: "string" } }, { name: "email", in: "query", description: "Only contacts with this email address.", schema: { type: "string" } }], response: "Contact", status: 200 },
+  listContacts: { method: "GET", path: "/contacts", tag: "Contacts", summary: "List contacts", description: "Newest first.", scope: "contacts:read", list: true, params: [...pageParams, { name: "phone", in: "query", description: "Only the contact with this E.164 phone number.", schema: { type: "string" } }, { name: "email", in: "query", description: "Only contacts with this email address.", schema: { type: "string" } }, { name: "name", in: "query", description: "Only contacts whose name contains this text. Case does not matter.", schema: { type: "string", maxLength: 200 } }], response: "Contact", status: 200 },
   createContact: { method: "POST", path: "/contacts", tag: "Contacts", summary: "Create a contact", description: "Returns 409 conflict when a contact with the same phone number exists.", scope: "contacts:write", idempotent: true, request: "ContactCreate", response: "Contact", status: 201 },
   getContact: { method: "GET", path: "/contacts/{contact_id}", tag: "Contacts", summary: "Get a contact", scope: "contacts:read", params: [idParam("contact_id", "contact")], response: "Contact", status: 200 },
   updateContact: { method: "PATCH", path: "/contacts/{contact_id}", tag: "Contacts", summary: "Update a contact", scope: "contacts:write", params: [idParam("contact_id", "contact")], request: "ContactUpdate", response: "Contact", status: 200 },
@@ -125,7 +125,8 @@ function ref(name: string) {
   return { $ref: `#/components/schemas/${name}` };
 }
 
-function jsonSchemaFor(schema: z.ZodType, io: "input" | "output"): Record<string, unknown> {
+/** JSON Schema (draft 2020-12) for a v1 contract schema, as the OpenAPI document and the MCP tools publish it. */
+export function apiJsonSchemaFor(schema: z.ZodType, io: "input" | "output"): Record<string, unknown> {
   const generated = z.toJSONSchema(schema, { target: "draft-2020-12", io, unrepresentable: "any" }) as Record<string, unknown>;
   delete generated.$schema;
   return stripFormatPatterns(generated) as Record<string, unknown>;
@@ -144,7 +145,7 @@ const errorResponse = (description: string) => ({ description, content: { "appli
 /** The OpenAPI 3.1 document for /api/v1, generated from the zod schemas above. */
 export function buildOpenApiDocument(input: { serverUrl: string }): Record<string, unknown> {
   const inputs = new Set<string>((Object.values(apiOperations) as ApiOperation[]).flatMap((operation) => ("request" in operation ? [operation.request] : [])));
-  const schemas = Object.fromEntries(Object.entries(componentSchemas).map(([name, schema]) => [name, jsonSchemaFor(schema, inputs.has(name) ? "input" : "output")]));
+  const schemas = Object.fromEntries(Object.entries(componentSchemas).map(([name, schema]) => [name, apiJsonSchemaFor(schema, inputs.has(name) ? "input" : "output")]));
   const paths: Record<string, Record<string, unknown>> = {};
   for (const [operationId, operation] of Object.entries(apiOperations) as Array<[string, ApiOperation]>) {
     const data = operation.list ? { type: "array", items: ref(operation.response) } : ref(operation.response);

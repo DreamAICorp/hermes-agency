@@ -25,7 +25,7 @@ import {
   type ApiStaff,
 } from "@lobbystack/shared";
 
-import { bookAppointment, cancelAppointmentInTransaction, findAvailability, rescheduleAppointmentInTransaction } from "../booking";
+import { bookAppointment, cancelAppointmentInTransaction, findAvailability, rescheduleAppointmentInTransaction, type ApiAudit } from "../booking";
 import { replaceBusinessHoursInTransaction } from "../catalog";
 import type { DomainContext } from "../context";
 import { createKnowledgeSnippetInTransaction } from "../knowledge";
@@ -55,14 +55,43 @@ import { emitWebhookEventInTransaction } from "./webhooks";
 // the worker database role and RLS, and reuses the same domain rules as the
 // dashboard and the receptionist.
 
-export type ApiCaller = { businessId: string; apiKeyId: string };
+/**
+ * The API key's business and id. `actor` names the surface that used the key:
+ * the REST API (the default) or the MCP server. Both run these same
+ * operations; the audit log tells them apart by actor.
+ */
+export type ApiActor = "api_key" | "mcp";
+/** A request authenticated with an API key, through REST or MCP. */
+export type ApiKeyCaller = { businessId: string; apiKeyId: string; grantId?: undefined; userId?: undefined; actor?: ApiActor | undefined };
+/** An MCP request authenticated with an OAuth access token: the grant is the owner's consent for one client and business. */
+export type OAuthGrantCaller = { businessId: string; grantId: string; userId: string; apiKeyId?: undefined; actor: "mcp" };
+export type ApiCaller = ApiKeyCaller | OAuthGrantCaller;
+
+/**
+ * The id that owns rate limits and idempotency records for a caller. API keys
+ * keep their bare id, so REST and MCP requests with one key share them; OAuth
+ * grants are prefixed so they can never collide with a key id.
+ */
+export function callerPrincipalId(caller: ApiCaller): string {
+  return caller.grantId !== undefined ? `grant:${caller.grantId}` : caller.apiKeyId;
+}
+
+/** Audit fields for a change made by a caller. The key or grant id is recorded, never a secret. */
+export function callerAudit(caller: ApiCaller): ApiAudit {
+  if (caller.grantId !== undefined) return { actorUserId: caller.userId, payload: { actor: "mcp", grantId: caller.grantId } };
+  return { actorUserId: null, payload: { actor: caller.actor ?? "api_key", apiKeyId: caller.apiKeyId } };
+}
 
 async function inBusiness<T>(context: DomainContext, caller: ApiCaller, callback: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
   return await withBusinessTransaction(context.db, { businessId: caller.businessId, actorType: "worker" }, callback);
 }
 
 async function audit(tx: DatabaseTransaction, caller: ApiCaller, input: { eventType: string; entityType: string; entityId?: string; payload?: Record<string, unknown> }) {
-  await tx.insert(auditLogs).values({ businessId: caller.businessId, eventType: input.eventType, entityType: input.entityType, ...(input.entityId ? { entityId: input.entityId } : {}), payload: { actor: "api_key", apiKeyId: caller.apiKeyId, ...input.payload } });
+  await tx.insert(auditLogs).values({ businessId: caller.businessId, eventType: input.eventType, entityType: input.entityType, ...(input.entityId ? { entityId: input.entityId } : {}), ...(callerAudit(caller).actorUserId ? { actorUserId: callerAudit(caller).actorUserId } : {}), payload: { ...callerAudit(caller).payload, ...input.payload } });
+}
+
+function apiChange(caller: ApiCaller) {
+  return { source: "api" as const, audit: callerAudit(caller) };
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -81,7 +110,7 @@ function assertTimeZone(value: string, field: string): void {
 // Business
 
 /** The key and its business, for integrations to test a connection. Needs no scope. */
-export async function getMeForApi(context: DomainContext, caller: ApiCaller): Promise<ApiMe> {
+export async function getMeForApi(context: DomainContext, caller: ApiKeyCaller): Promise<ApiMe> {
   return await inBusiness(context, caller, async (tx) => {
     const [row] = await tx.select({ id: apiKeys.id, name: apiKeys.name, prefix: apiKeys.prefix, scopes: apiKeys.scopes, createdAt: apiKeys.createdAt, businessName: businesses.name }).from(apiKeys).innerJoin(businesses, eq(businesses.id, apiKeys.businessId)).where(and(eq(apiKeys.businessId, caller.businessId), eq(apiKeys.id, caller.apiKeyId))).limit(1);
     if (!row) throw notFound("API key");
@@ -141,7 +170,7 @@ async function assertBookableStaff(tx: DatabaseTransaction, businessId: string, 
 
 // Calls
 
-export async function listCallsForApi(context: DomainContext, caller: ApiCaller, request: PageRequest): Promise<Page<ApiCall>> {
+export async function listCallsForApi(context: DomainContext, caller: ApiCaller, request: Parameters<typeof listCallResources>[2]): Promise<Page<ApiCall>> {
   return await inBusiness(context, caller, async (tx) => await listCallResources(tx, caller.businessId, request));
 }
 
@@ -155,7 +184,7 @@ export async function getCallForApi(context: DomainContext, caller: ApiCaller, c
 
 // Contacts
 
-export async function listContactsForApi(context: DomainContext, caller: ApiCaller, request: PageRequest & { phone?: string | undefined; email?: string | undefined }): Promise<Page<ApiContact>> {
+export async function listContactsForApi(context: DomainContext, caller: ApiCaller, request: Parameters<typeof listContactResources>[2]): Promise<Page<ApiContact>> {
   return await inBusiness(context, caller, async (tx) => await listContactResources(tx, caller.businessId, request));
 }
 
@@ -306,7 +335,7 @@ export async function createAppointmentForApi(context: DomainContext, caller: Ap
       timezone: prepared.timezone,
       contactPhone: prepared.contactPhone,
       sourceChannel: "api",
-      apiKeyId: caller.apiKeyId,
+      apiAudit: callerAudit(caller),
       ...(input.contact_name ? { contactName: input.contact_name } : {}),
       ...(input.staff_id ? { preferredStaffId: input.staff_id } : {}),
       ...(input.sms_consent ? { smsConsentGranted: true } : {}),
@@ -319,7 +348,7 @@ export async function createAppointmentForApi(context: DomainContext, caller: Ap
 
 export async function cancelAppointmentForApi(context: DomainContext, caller: ApiCaller, appointmentId: string): Promise<ApiAppointment> {
   return await inBusiness(context, caller, async (tx) => {
-    const result = await cancelAppointmentInTransaction(tx, { businessId: caller.businessId, appointmentId, change: { source: "api", apiKeyId: caller.apiKeyId } });
+    const result = await cancelAppointmentInTransaction(tx, { businessId: caller.businessId, appointmentId, change: apiChange(caller) });
     if (result === "missing") throw notFound("Appointment");
     const appointment = await loadAppointmentResource(tx, caller.businessId, appointmentId);
     if (!appointment) throw notFound("Appointment");
@@ -344,7 +373,7 @@ export async function rescheduleAppointmentForApi(context: DomainContext, caller
         const [ownCalendar] = await tx.select({ id: calendarConnections.id }).from(calendarConnections).where(and(eq(calendarConnections.businessId, caller.businessId), ne(calendarConnections.status, "disconnected"), inArray(calendarConnections.staffId, [existing.staffId, input.staff_id]))).limit(1);
         if (ownCalendar) throw conflict("This appointment can't move to another staff member because one of them has their own connected calendar. Cancel it and book a new one instead.");
       }
-      const moved = await rescheduleAppointmentInTransaction(tx, { businessId: caller.businessId, appointmentId, startsAt: startsAt.toISOString(), change: { source: "api", apiKeyId: caller.apiKeyId }, ...(input.staff_id ? { staffId: input.staff_id } : {}) });
+      const moved = await rescheduleAppointmentInTransaction(tx, { businessId: caller.businessId, appointmentId, startsAt: startsAt.toISOString(), change: apiChange(caller), ...(input.staff_id ? { staffId: input.staff_id } : {}) });
       if (!moved) throw notFound("Appointment");
       const appointment = await loadAppointmentResource(tx, caller.businessId, appointmentId);
       if (!appointment) throw notFound("Appointment");

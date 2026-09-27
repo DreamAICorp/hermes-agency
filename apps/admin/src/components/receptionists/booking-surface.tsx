@@ -12,13 +12,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Surface } from "@/components/ui/surface";
 import { Switch } from "@/components/ui/switch";
 import { useNavigationSnapshot } from "@/components/navigation/navigation-provider";
+import { allServicesQueryKey, fetchAllCatalogServices } from "@/lib/catalog-services";
 import { requestJson } from "@/lib/request-json";
 import { itemUsedBy, receptionistUsesItem } from "@/lib/receptionist-usage";
 import { ReceptionistPage, receptionistsQueryKey, SaveRow, useReceptionist, useReceptionistsOverview, useSaveReceptionist, type ReceptionistSettings } from "./receptionist-page";
 import { SharedToggleList } from "./shared-toggle-list";
 
 type BookingValues = { bookingMode: BookingMode; allowCancel: boolean; allowReschedule: boolean; requireOtp: boolean };
-type Service = { id: string; name: string; durationMinutes: number; description: string | null; active: boolean };
 
 function valuesFrom(profile: ReceptionistSettings): BookingValues {
   return {
@@ -39,7 +39,7 @@ export function ReceptionistBookingSurface({ agentId, staffSection }: { agentId:
   const query = useReceptionist(agentId);
   const overview = useReceptionistsOverview();
   const save = useSaveReceptionist(agentId);
-  const catalog = useQuery({ queryKey: ["catalog", businessId], enabled: Boolean(businessId), queryFn: () => requestJson<{ services: Service[] }>(`/api/catalog?businessId=${encodeURIComponent(businessId!)}&limit=100`) });
+  const catalog = useQuery({ queryKey: allServicesQueryKey(businessId), enabled: Boolean(businessId), queryFn: () => fetchAllCatalogServices(businessId!) });
   const saved = useMemo(() => query.data ? valuesFrom(query.data.profile) : null, [query.data]);
   const [values, setValues] = useState<BookingValues | null>(null);
   const [saving, setSaving] = useState(false);
@@ -64,7 +64,7 @@ export function ReceptionistBookingSurface({ agentId, staffSection }: { agentId:
   }
 
   const usage = overview.data?.usage;
-  const services = usage ? (catalog.data?.services ?? []).filter((service) => service.active).map((service) => ({
+  const services = usage ? (catalog.data ?? []).filter((service) => service.active).map((service) => ({
     id: service.id,
     title: service.name,
     description: t("booking.duration", { count: service.durationMinutes }),

@@ -78,7 +78,7 @@ export function ReceptionistTransfersSurface({ agentId }: { agentId: string }) {
                 </Field>
               </FieldGroup>
             </Surface>
-            {canManage ? <SaveRow dirty={dirty && !invalidNumber} onReset={() => saved && setValues(saved)} onSave={() => void submit()} saving={saving} /> : null}
+            {canManage ? <SaveRow canSave={!invalidNumber} dirty={dirty} onReset={() => saved && setValues(saved)} onSave={() => void submit()} saving={saving} /> : null}
           </form>
         )}
         <section className="flex flex-col gap-3">

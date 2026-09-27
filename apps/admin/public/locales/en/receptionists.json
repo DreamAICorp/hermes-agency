@@ -1,0 +1,203 @@
+{
+  "nav": {
+    "home": "Home",
+    "inbox": "Inbox",
+    "calendar": "Calendar",
+    "contacts": "Contacts",
+    "analytics": "Analytics",
+    "receptionists": "Receptionists",
+    "receptionist": "Receptionist",
+    "newReceptionist": "New receptionist",
+    "business": "Business",
+    "services": "Services",
+    "staff": "Staff",
+    "knowledge": "Knowledge",
+    "numbers": "Numbers and widget",
+    "integrations": "Integrations",
+    "settings": "Settings",
+    "backTo": "Back to {{name}}",
+    "switchReceptionist": "Switch receptionist",
+    "findReceptionist": "Find a receptionist",
+    "search": "Search"
+  },
+  "sections": {
+    "overview": "Overview and test call",
+    "behavior": "Behavior",
+    "knowledge": "Knowledge",
+    "booking": "Booking",
+    "transfers": "Transfers and rules",
+    "numbers": "Numbers and widget"
+  },
+  "pageTitle": "{{name}} · {{section}}",
+  "command": {
+    "title": "Search",
+    "description": "Jump to any page or receptionist.",
+    "placeholder": "Search pages and receptionists",
+    "empty": "Nothing matches that search.",
+    "receptionistPage": "{{name}}: {{section}}",
+    "groups": {
+      "pages": "Pages",
+      "receptionists": "Receptionists",
+      "settings": "Settings"
+    },
+    "settings": {
+      "usage": "Settings: Usage",
+      "billing": "Settings: Billing",
+      "business": "Settings: Business and team",
+      "appearance": "Settings: Appearance",
+      "notifications": "Settings: Notifications",
+      "account": "Settings: Your account"
+    }
+  },
+  "save": {
+    "save": "Save changes",
+    "saving": "Saving",
+    "saved": "Changes saved",
+    "failed": "We couldn't save your changes. Try again.",
+    "discard": "Discard",
+    "unsaved": "You have unsaved changes"
+  },
+  "shared": {
+    "all": "Used by all receptionists",
+    "some": "Used by {{names}}",
+    "none": "No receptionist uses this",
+    "turnedOn": "{{title}} is on for this receptionist",
+    "turnedOff": "{{title}} is off for this receptionist",
+    "servicesTitle": "Some receptionists skip some services",
+    "servicesHint": "Your receptionists share these services. A change here reaches every receptionist that books them.",
+    "knowledgeTitle": "Some receptionists skip some knowledge",
+    "knowledgeHint": "Your receptionists share this knowledge. A change here reaches every receptionist that uses it.",
+    "skips": "<link>{{name}}</link> doesn't use {{items}}."
+  },
+  "behavior": {
+    "description": "How this receptionist greets people, what it follows, and how it sounds.",
+    "name": {
+      "label": "Name",
+      "hint": "Only you and your team see this name."
+    },
+    "greeting": {
+      "label": "Greeting",
+      "hint": "The first thing callers and website visitors hear."
+    },
+    "voiceInstructions": {
+      "label": "Instructions for calls",
+      "hint": "What the receptionist should do and say on the phone. Leave empty to use the standard instructions.",
+      "placeholder": "Ask for the caller's name first. Mention our spring promotion."
+    },
+    "chatInstructions": {
+      "label": "Instructions for website chat",
+      "hint": "What the receptionist should do in the chat on your website. Leave empty to use the standard instructions.",
+      "placeholder": "Keep answers short and link to our booking page."
+    },
+    "tone": {
+      "label": "Tone",
+      "hint": "A few words, for example warm and direct."
+    },
+    "voice": {
+      "label": "Voice",
+      "hint": "The voice callers hear.",
+      "default": "Marin (standard)"
+    },
+    "language": {
+      "label": "Language",
+      "hint": "The language it starts in. Callers can still switch.",
+      "business": "Same as the business ({{language}})"
+    }
+  },
+  "knowledge": {
+    "description": "Pick which of your business knowledge this receptionist uses. New knowledge is on for every receptionist.",
+    "listTitle": "Knowledge this receptionist uses",
+    "listDescription": "Turn off anything this receptionist shouldn't talk about.",
+    "empty": "Your business has no knowledge yet. Add some under Knowledge.",
+    "manage": "Edit knowledge"
+  },
+  "booking": {
+    "description": "Whether this receptionist books appointments and which services it can book.",
+    "duration_one": "{{count}} minute",
+    "duration_other": "{{count}} minutes",
+    "mode": {
+      "label": "Booking",
+      "options": {
+        "instant": "Book appointments",
+        "request": "Take appointment requests",
+        "off": "Don't book"
+      },
+      "descriptions": {
+        "instant": "The receptionist checks your calendar and books the appointment.",
+        "request": "The receptionist collects the details and your team confirms the time.",
+        "off": "The receptionist answers questions and takes messages but doesn't book."
+      }
+    },
+    "allowCancel": {
+      "label": "Let callers cancel",
+      "hint": "Callers can cancel an appointment after the receptionist checks who they are."
+    },
+    "allowReschedule": {
+      "label": "Let callers reschedule",
+      "hint": "Callers can move an appointment after the receptionist checks who they are."
+    },
+    "requireOtp": {
+      "label": "Text a code first",
+      "hint": "Callers confirm a code sent to their phone before any change."
+    },
+    "servicesTitle": "Services this receptionist can book",
+    "servicesDescription": "Turn off services this receptionist shouldn't book.",
+    "servicesEmpty": "Your business has no services yet. Add some under Services.",
+    "manageServices": "Edit services"
+  },
+  "transfers": {
+    "description": "When this receptionist passes a call to a person, and the rules it follows.",
+    "mode": {
+      "label": "Transfer calls",
+      "hint": "When the receptionist sends a caller to your team.",
+      "options": {
+        "on_request": "When the caller asks",
+        "on_urgent": "When it's urgent",
+        "during_business_hours": "During business hours",
+        "always": "Always",
+        "never": "Never"
+      }
+    },
+    "number": {
+      "label": "Transfer number",
+      "hint": "The phone that rings when a call is transferred.",
+      "invalid": "Enter a full phone number, including the area code.",
+      "missing": "Add a number so transfers have somewhere to go."
+    },
+    "rulesTitle": "Rules",
+    "rulesDescription": "Extra instructions only this receptionist follows."
+  },
+  "numbers": {
+    "description": "The phone numbers and website widget this receptionist answers.",
+    "manage": "Manage numbers and widget",
+    "empty": "No number or widget goes to this receptionist yet.",
+    "widget": "Website widget",
+    "phoneRoute": "Calls and texts to this number",
+    "widgetRoute": "Chats and calls from your website",
+    "defaultNote": "This receptionist also answers anything you haven't assigned to another one."
+  },
+  "overview": {
+    "description": "A quick look at this receptionist. Start a test call to hear it.",
+    "greeting": "Greeting",
+    "voiceAndLanguage": "Voice: {{voice}}. Language: {{language}}.",
+    "booking": "Booking",
+    "transfers": "Transfers",
+    "routes": "Numbers and widget",
+    "routeCount": "{{numbers}}, {{widgets}}",
+    "numbers_one": "{{count}} number",
+    "numbers_other": "{{count}} numbers",
+    "widgets_one": "{{count}} widget",
+    "widgets_other": "{{count}} widgets",
+    "testCall": "Test call"
+  },
+  "inbox": {
+    "tabs": {
+      "calls": "Calls",
+      "chats": "Chats and texts"
+    }
+  },
+  "numbersPage": {
+    "phoneTitle": "Phone number",
+    "widgetTitle": "Website widget"
+  }
+}

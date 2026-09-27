@@ -100,6 +100,26 @@ async function main(): Promise<void> {
         }).onConflictDoNothing({ target: businesses.slug });
         console.log("Deterministic seed applied.");
         break;
+      case "flag": {
+        // pnpm db:flag <business id or slug> <flag> on|off
+        const [target, flag, value] = process.argv.slice(3);
+        if (!target || !flag || !/^[a-z][a-z0-9_]{0,63}$/.test(flag) || (value !== "on" && value !== "off")) {
+          throw new Error("Usage: pnpm db:flag <business id or slug> <flag> on|off");
+        }
+        const byId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target);
+        const updated = await migrator.db.execute<{ id: string; slug: string; feature_flags: unknown }>(sql`
+          update public.businesses
+          set feature_flags = case when ${value} = 'on'
+            then feature_flags || jsonb_build_object(${flag}::text, true)
+            else feature_flags - ${flag}::text end,
+            updated_at = now()
+          where ${byId ? sql`id = ${target}::uuid` : sql`slug = ${target}`}
+          returning id, slug, feature_flags
+        `);
+        if (updated.rows.length === 0) throw new Error(`No business matches ${target}.`);
+        console.log(JSON.stringify(updated.rows[0]));
+        break;
+      }
       case "reset-test":
         if (process.env.NODE_ENV === "production") {
           throw new Error("db:reset:test is disabled in production.");

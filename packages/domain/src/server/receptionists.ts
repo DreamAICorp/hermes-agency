@@ -411,6 +411,33 @@ export async function setReceptionistService(
   });
 }
 
+export type WorkspaceNavigation = {
+  businessId: string;
+  businessName: string;
+  featureFlags: Record<string, boolean>;
+  staffEnabled: boolean;
+  role: string;
+  receptionists: Array<{ id: string; name: string; isDefault: boolean }>;
+};
+
+/** Everything the dashboard navigation needs about the active business, in one transaction. */
+export async function getWorkspaceNavigation(context: DomainContext, input: { userId: string; businessId: string }): Promise<WorkspaceNavigation | null> {
+  return await withBusinessTransaction(context.db, { ...input, actorType: "operator" }, async (tx) => {
+    const membership = await requireBusinessMembership(tx, input);
+    const [business] = await tx.select({ name: businesses.name, featureFlags: businesses.featureFlags, staffEnabled: businesses.staffEnabled }).from(businesses).where(eq(businesses.id, input.businessId)).limit(1);
+    if (!business) return null;
+    const rows = await listActiveReceptionists(tx, input.businessId);
+    return {
+      businessId: input.businessId,
+      businessName: business.name,
+      featureFlags: business.featureFlags ?? {},
+      staffEnabled: business.staffEnabled,
+      role: membership.role,
+      receptionists: rows.map((row) => ({ id: row.id, name: row.name, isDefault: row.isDefault })),
+    };
+  });
+}
+
 /** Turns staff management on or off for the business. */
 export async function setStaffEnabled(context: DomainContext, input: { userId: string; businessId: string; enabled: boolean }): Promise<void> {
   await withBusinessTransaction(context.db, { ...input, actorType: "operator" }, async (tx) => {

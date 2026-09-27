@@ -138,6 +138,8 @@ export const businesses = pgTable(
     telemetryEnabled: boolean("telemetry_enabled").default(true).notNull(),
     /** Shows staff management and staff columns. Booking works with the hidden default staff member when off. */
     staffEnabled: boolean("staff_enabled").default(false).notNull(),
+    /** Per-business feature flags such as `new_navigation`. Missing keys are off. */
+    featureFlags: jsonb("feature_flags").$type<Record<string, boolean>>().default({}).notNull(),
     ...legacyId,
     ...timestamps,
   },

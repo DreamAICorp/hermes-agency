@@ -149,8 +149,9 @@ export async function getReceptionist(context: DomainContext, input: { userId: s
 
 /**
  * Adds a receptionist. It starts as a copy of `copyFromAgentId` (default: the
- * business's default receptionist) so it can answer right away, uses every
- * knowledge item and service, and has no numbers until the owner routes one.
+ * business's default receptionist) so it can answer right away: settings,
+ * rules, and knowledge and service opt-outs. It has no numbers until the owner
+ * routes one.
  */
 export async function createReceptionist(
   context: DomainContext,
@@ -179,6 +180,15 @@ export async function createReceptionist(
       language: source.language,
     }).returning();
     if (!created) throw new Error("Receptionist could not be created.");
+    // A copy behaves like its source: same rules, and it skips the same knowledge and services.
+    const [rules, knowledgeOptOuts, serviceOptOuts] = await Promise.all([
+      tx.select({ title: agentRules.title, content: agentRules.content, active: agentRules.active, sortOrder: agentRules.sortOrder }).from(agentRules).where(and(eq(agentRules.businessId, input.businessId), eq(agentRules.agentId, source.id))),
+      tx.select({ knowledgeDocumentId: agentKnowledgeOptOuts.knowledgeDocumentId, knowledgeSnippetId: agentKnowledgeOptOuts.knowledgeSnippetId }).from(agentKnowledgeOptOuts).where(and(eq(agentKnowledgeOptOuts.businessId, input.businessId), eq(agentKnowledgeOptOuts.agentId, source.id))),
+      tx.select({ serviceId: agentServiceOptOuts.serviceId }).from(agentServiceOptOuts).where(and(eq(agentServiceOptOuts.businessId, input.businessId), eq(agentServiceOptOuts.agentId, source.id))),
+    ]);
+    if (rules.length) await tx.insert(agentRules).values(rules.map((rule) => ({ ...rule, businessId: input.businessId, agentId: created.id })));
+    if (knowledgeOptOuts.length) await tx.insert(agentKnowledgeOptOuts).values(knowledgeOptOuts.map((optOut) => ({ ...optOut, businessId: input.businessId, agentId: created.id })));
+    if (serviceOptOuts.length) await tx.insert(agentServiceOptOuts).values(serviceOptOuts.map((optOut) => ({ ...optOut, businessId: input.businessId, agentId: created.id })));
     await enqueueSnapshotRefresh(tx, input.businessId, created.id, "receptionist_created");
     return created;
   });

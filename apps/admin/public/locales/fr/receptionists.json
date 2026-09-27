@@ -46,7 +46,9 @@
       "business": "Paramètres : Entreprise et équipe",
       "appearance": "Paramètres : Apparence",
       "notifications": "Paramètres : Notifications",
-      "account": "Paramètres : Votre compte"
+      "account": "Paramètres : Votre compte",
+      "apiKeys": "Paramètres : Clés d'API",
+      "webhooks": "Intégrations : Webhooks"
     }
   },
   "save": {

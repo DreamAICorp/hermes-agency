@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useNavigationSnapshot } from "@/components/navigation/navigation-provider";
 import { receptionistPath } from "@/lib/navigation-routes";
+import { allServicesQueryKey, fetchAllCatalogServices } from "@/lib/catalog-services";
 import { requestJson } from "@/lib/request-json";
 import { useReceptionistsOverview } from "./receptionist-page";
 
@@ -33,14 +34,15 @@ export function SharedUsageNotice({ kind }: { kind: "services" | "knowledge" }) 
   const navigation = useNavigationSnapshot();
   const businessId = navigation?.businessId;
   const overview = useReceptionistsOverview();
-  const catalog = useQuery({ queryKey: ["catalog", businessId], enabled: Boolean(businessId && kind === "services"), queryFn: () => requestJson<{ services: Array<{ id: string; name: string }> }>(`/api/catalog?businessId=${encodeURIComponent(businessId!)}&limit=100`) });
+  const catalog = useQuery({ queryKey: allServicesQueryKey(businessId), enabled: Boolean(businessId && kind === "services"), queryFn: () => fetchAllCatalogServices(businessId!) });
+  const services = catalog.data;
   const documents = useQuery({ queryKey: ["knowledge", businessId], enabled: Boolean(businessId && kind === "knowledge"), queryFn: () => requestJson<{ documents: Array<{ id: string; title: string }> }>(`/api/knowledge?businessId=${encodeURIComponent(businessId!)}`) });
   const snippets = useQuery({ queryKey: ["knowledge-snippets", businessId], enabled: Boolean(businessId && kind === "knowledge"), queryFn: () => requestJson<{ snippets: Array<{ id: string; title: string }> }>(`/api/knowledge/snippets?businessId=${encodeURIComponent(businessId!)}`) });
   const usage = overview.data?.usage;
   if (!usage || !navigation || navigation.receptionists.length < 2) return null;
 
   const names = new Map<string, string>([
-    ...(catalog.data?.services ?? []).map((service) => [service.id, service.name] as const),
+    ...(services ?? []).map((service) => [service.id, service.name] as const),
     ...(documents.data?.documents ?? []).map((document) => [document.id, document.title] as const),
     ...(snippets.data?.snippets ?? []).map((snippet) => [snippet.id, snippet.title] as const),
   ]);

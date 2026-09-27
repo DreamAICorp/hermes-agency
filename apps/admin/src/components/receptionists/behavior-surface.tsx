@@ -121,7 +121,7 @@ export function ReceptionistBehaviorSurface({ agentId }: { agentId: string }) {
               </div>
             </FieldGroup>
           </Surface>
-          {canManage ? <SaveRow dirty={dirty && !invalid} onReset={() => saved && setValues(saved)} onSave={() => void submit()} saving={saving} /> : null}
+          {canManage ? <SaveRow canSave={!invalid} dirty={dirty} onReset={() => saved && setValues(saved)} onSave={() => void submit()} saving={saving} /> : null}
         </form>
       )}
     </ReceptionistPage>

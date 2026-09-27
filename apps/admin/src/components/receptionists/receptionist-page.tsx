@@ -115,16 +115,17 @@ export function ReceptionistPage({ agentId, section, description, actions, child
 }
 
 /**
- * The save row every receptionist form uses: the button stays off until
- * something changed, shows progress while saving, and a toast confirms.
+ * The save row every receptionist form uses. Save stays off until something
+ * changed and the form is valid; Discard works as soon as something changed,
+ * even while the form is invalid. Saving shows progress, and a toast confirms.
  */
-export function SaveRow({ dirty, saving, onSave, onReset }: { dirty: boolean; saving: boolean; onSave: () => void; onReset: () => void }) {
+export function SaveRow({ dirty, canSave = dirty, saving, onSave, onReset }: { dirty: boolean; canSave?: boolean; saving: boolean; onSave: () => void; onReset: () => void }) {
   const { t } = useTranslation("receptionists");
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
       {dirty && !saving ? <span className="mr-auto text-sm text-muted-foreground">{t("save.unsaved")}</span> : null}
       <Button disabled={!dirty || saving} onClick={onReset} type="button" variant="ghost">{t("save.discard")}</Button>
-      <Button disabled={!dirty || saving} onClick={onSave} type="button">
+      <Button disabled={!dirty || !canSave || saving} onClick={onSave} type="button">
         {saving ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
         {saving ? t("save.saving") : t("save.save")}
       </Button>

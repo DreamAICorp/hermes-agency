@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
-import { agents, businessContextSnapshots, calls, conversations, createDatabaseClient, knowledgeDocuments, phoneNumbers, receptionistProfiles, services, users, widgetKeys, type Database, type DatabaseTransaction } from "@lobbystack/db";
+import { agents, businessContextSnapshots, calls, conversations, createDatabaseClient, knowledgeDocuments, knowledgeSnippets, messages, phoneNumbers, receptionistProfiles, services, users, widgetKeys, type Database, type DatabaseTransaction } from "@lobbystack/db";
 import { snapshotForReceptionist, type BusinessContextSnapshot } from "@lobbystack/shared";
 
 import { refreshBusinessSnapshot } from "./knowledge";
@@ -19,6 +19,7 @@ import {
   setStaffEnabled,
   updateReceptionist,
 } from "./receptionists";
+import { createAgentRule, listAgentRules } from "./rules";
 import { receiveInboundSms } from "./sms";
 import { createBusiness } from "./tenancy";
 import { startCall } from "./voice";
@@ -190,6 +191,67 @@ describe.skipIf(!client)("receptionists against PostgreSQL under RLS", () => {
       expect(conversationRow?.agentId).toBe(sales.id);
       expect(defaultRow?.agentId).toBe(defaultAgent!.id);
       expect(textRow?.agentId).toBe(sales.id);
+    });
+  });
+
+  it("keeps a separate text thread per receptionist for the same contact", async () => {
+    await rollbackTest(async (tx) => {
+      const { userId, businessId, context } = await seedOwner(tx, "Two Line Clinic");
+      const suffix = String(Date.now()).slice(-6);
+      const [dayNumber] = await tx.insert(phoneNumbers).values({ businessId, e164: `+1555${suffix}1` }).returning({ id: phoneNumbers.id, e164: phoneNumbers.e164, agentId: phoneNumbers.agentId });
+      const [nightNumber] = await tx.insert(phoneNumbers).values({ businessId, e164: `+1555${suffix}2` }).returning({ id: phoneNumbers.id, e164: phoneNumbers.e164 });
+      await as(tx, "lobbystack_app");
+      const night = await createReceptionist(context, { userId, businessId, name: "Night" });
+      await routePhoneNumber(context, { userId, businessId, phoneNumberId: nightNumber!.id, agentId: night.id });
+      await as(tx, "lobbystack_worker");
+      const text = (to: string, body: string) => receiveInboundSms(context, { businessId, providerMessageId: `SM${randomUUID().replaceAll("-", "")}`, from: "+15145550177", to, body, payload: {} });
+      await text(dayNumber!.e164, "Hi day line");
+      await text(nightNumber!.e164, "Hi night line");
+      await text(nightNumber!.e164, "Still there?");
+      await as(tx, "migrator");
+      const threads = await tx.select({ agentId: conversations.agentId, total: count(messages.id) }).from(conversations).innerJoin(messages, eq(messages.conversationId, conversations.id)).where(and(eq(conversations.businessId, businessId), eq(conversations.channel, "sms"))).groupBy(conversations.id, conversations.agentId);
+      expect(threads.map((thread) => [thread.agentId, Number(thread.total)]).sort()).toEqual([[dayNumber!.agentId, 1], [night.id, 2]].sort());
+    });
+  });
+
+  it("copies rules and opt-outs when a receptionist starts from another", async () => {
+    await rollbackTest(async (tx) => {
+      const { userId, businessId, context } = await seedOwner(tx, "Copy Clinic");
+      const [service] = await tx.insert(services).values({ businessId, name: "Surgery", slug: "surgery", durationMinutes: 60 }).returning({ id: services.id });
+      const [snippet] = await tx.insert(knowledgeSnippets).values({ businessId, title: "Prices", content: "Ask us." }).returning({ id: knowledgeSnippets.id });
+      await as(tx, "lobbystack_app");
+      const source = await createReceptionist(context, { userId, businessId, name: "Source" });
+      await createAgentRule(context, { userId, businessId, agentId: source.id, title: "Night rule", content: "Say we open at 8." });
+      await setReceptionistService(context, { userId, businessId, agentId: source.id, serviceId: service!.id, enabled: false });
+      await setReceptionistKnowledgeItem(context, { userId, businessId, agentId: source.id, snippetId: snippet!.id, enabled: false });
+      const copy = await createReceptionist(context, { userId, businessId, name: "Copy", copyFromAgentId: source.id });
+      const rules = await listAgentRules(context, { userId, businessId, agentId: copy.id });
+      const usage = await getSharedItemUsage(context, { userId, businessId });
+      await as(tx, "migrator");
+      expect(rules.map((rule) => rule.title)).toEqual(["Night rule"]);
+      expect(usage.serviceOptOuts.filter((row) => row.agentId === copy.id)).toEqual([{ agentId: copy.id, serviceId: service!.id }]);
+      expect(usage.knowledgeOptOuts.filter((row) => row.agentId === copy.id)).toEqual([{ agentId: copy.id, documentId: null, snippetId: snippet!.id }]);
+    });
+  });
+
+  it("refuses opt-outs that point at another business's items", async () => {
+    await rollbackTest(async (tx) => {
+      const first = await seedOwner(tx, "First Clinic");
+      const second = await seedOwner(tx, "Second Clinic");
+      const [foreignService] = await tx.insert(services).values({ businessId: second.businessId, name: "Theirs", slug: "theirs", durationMinutes: 30 }).returning({ id: services.id });
+      const [foreignSnippet] = await tx.insert(knowledgeSnippets).values({ businessId: second.businessId, title: "Theirs", content: "Private." }).returning({ id: knowledgeSnippets.id });
+      const [firstAgent] = await tx.select({ id: agents.id }).from(agents).where(eq(agents.businessId, first.businessId));
+      await as(tx, "lobbystack_app");
+      await tx.execute(sql`select set_config('app.business_id', ${first.businessId}, true), set_config('app.user_id', ${first.userId}, true), set_config('app.actor_type', 'operator', true)`);
+      await tx.execute(sql`savepoint foreign_service`);
+      await expect(tx.execute(sql`insert into agent_service_opt_outs (business_id, agent_id, service_id) values (${first.businessId}, ${firstAgent!.id}, ${foreignService!.id})`)).rejects.toMatchObject({ cause: expect.objectContaining({ constraint: "agent_service_opt_outs_service_fk" }) });
+      await tx.execute(sql`rollback to savepoint foreign_service`);
+      await tx.execute(sql`savepoint foreign_snippet`);
+      await expect(tx.execute(sql`insert into agent_knowledge_opt_outs (business_id, agent_id, knowledge_snippet_id) values (${first.businessId}, ${firstAgent!.id}, ${foreignSnippet!.id})`)).rejects.toMatchObject({ cause: expect.objectContaining({ constraint: "agent_knowledge_opt_outs_snippet_fk" }) });
+      await tx.execute(sql`rollback to savepoint foreign_snippet`);
+      // The domain function checks the item belongs to the business before writing.
+      await expect(setReceptionistService(first.context, { userId: first.userId, businessId: first.businessId, agentId: firstAgent!.id, serviceId: foreignService!.id, enabled: false })).rejects.toMatchObject({ status: 404 });
+      await as(tx, "migrator");
     });
   });
 

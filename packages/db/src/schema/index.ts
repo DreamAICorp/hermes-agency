@@ -247,7 +247,7 @@ export const services = pgTable(
     ...legacyId,
     ...timestamps,
   },
-  (table) => [uniqueIndex("services_business_slug_unique").on(table.businessId, table.slug), index("services_business_idx").on(table.businessId)],
+  (table) => [uniqueIndex("services_business_slug_unique").on(table.businessId, table.slug), index("services_business_idx").on(table.businessId), uniqueIndex("services_id_business_unique").on(table.id, table.businessId)],
 );
 
 export const staffServiceAssignments = pgTable(
@@ -689,7 +689,7 @@ export const knowledgeDocuments = pgTable(
     ...legacyId,
     ...timestamps,
   },
-  (table) => [index("knowledge_documents_business_status_idx").on(table.businessId, table.status), index("knowledge_documents_hash_idx").on(table.businessId, table.contentHash), uniqueIndex("knowledge_documents_business_url_unique").on(table.businessId, table.sourceUrl), index("knowledge_documents_title_keyword_idx").using("gin", sql`to_tsvector('simple', ${table.title})`)],
+  (table) => [index("knowledge_documents_business_status_idx").on(table.businessId, table.status), index("knowledge_documents_hash_idx").on(table.businessId, table.contentHash), uniqueIndex("knowledge_documents_business_url_unique").on(table.businessId, table.sourceUrl), uniqueIndex("knowledge_documents_id_business_unique").on(table.id, table.businessId), index("knowledge_documents_title_keyword_idx").using("gin", sql`to_tsvector('simple', ${table.title})`)],
 );
 
 export const knowledgeChunks = pgTable(
@@ -724,7 +724,7 @@ export const knowledgeSnippets = pgTable(
     ...legacyId,
     ...timestamps,
   },
-  (table) => [index("knowledge_snippets_business_active_idx").on(table.businessId, table.active)],
+  (table) => [index("knowledge_snippets_business_active_idx").on(table.businessId, table.active), uniqueIndex("knowledge_snippets_id_business_unique").on(table.id, table.businessId)],
 );
 
 export const agentRules = pgTable(
@@ -750,8 +750,9 @@ export const agentKnowledgeOptOuts = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
     agentId: uuid("agent_id").notNull(),
-    knowledgeDocumentId: uuid("knowledge_document_id").references(() => knowledgeDocuments.id, { onDelete: "cascade" }),
-    knowledgeSnippetId: uuid("knowledge_snippet_id").references(() => knowledgeSnippets.id, { onDelete: "cascade" }),
+    // Composite foreign keys with business_id live in migration 0067.
+    knowledgeDocumentId: uuid("knowledge_document_id"),
+    knowledgeSnippetId: uuid("knowledge_snippet_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -767,7 +768,8 @@ export const agentServiceOptOuts = pgTable(
   {
     businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
     agentId: uuid("agent_id").notNull(),
-    serviceId: uuid("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+    // Composite foreign key with business_id lives in migration 0067.
+    serviceId: uuid("service_id").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.agentId, table.serviceId] }), index("agent_service_opt_outs_business_idx").on(table.businessId)],

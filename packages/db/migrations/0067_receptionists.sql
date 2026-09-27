@@ -46,15 +46,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS agents_business_default_unique
 CREATE INDEX IF NOT EXISTS agents_business_created_idx ON public.agents (business_id, created_at);
 
 -- Knowledge and services are shared by the business. A receptionist uses all of
--- them unless it has an opt-out row.
+-- them unless it has an opt-out row. Every reference is a composite key with
+-- business_id, so an opt-out can only name items of its own business.
+ALTER TABLE public.services DROP CONSTRAINT IF EXISTS services_id_business_unique;
+ALTER TABLE public.services ADD CONSTRAINT services_id_business_unique UNIQUE (id, business_id);
+ALTER TABLE public.knowledge_documents DROP CONSTRAINT IF EXISTS knowledge_documents_id_business_unique;
+ALTER TABLE public.knowledge_documents ADD CONSTRAINT knowledge_documents_id_business_unique UNIQUE (id, business_id);
+ALTER TABLE public.knowledge_snippets DROP CONSTRAINT IF EXISTS knowledge_snippets_id_business_unique;
+ALTER TABLE public.knowledge_snippets ADD CONSTRAINT knowledge_snippets_id_business_unique UNIQUE (id, business_id);
+
 CREATE TABLE IF NOT EXISTS public.agent_knowledge_opt_outs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   business_id uuid NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
   agent_id uuid NOT NULL,
-  knowledge_document_id uuid REFERENCES public.knowledge_documents(id) ON DELETE CASCADE,
-  knowledge_snippet_id uuid REFERENCES public.knowledge_snippets(id) ON DELETE CASCADE,
+  knowledge_document_id uuid,
+  knowledge_snippet_id uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT agent_knowledge_opt_outs_agent_fk FOREIGN KEY (agent_id, business_id) REFERENCES public.agents(id, business_id) ON DELETE CASCADE,
+  CONSTRAINT agent_knowledge_opt_outs_document_fk FOREIGN KEY (knowledge_document_id, business_id) REFERENCES public.knowledge_documents(id, business_id) ON DELETE CASCADE,
+  CONSTRAINT agent_knowledge_opt_outs_snippet_fk FOREIGN KEY (knowledge_snippet_id, business_id) REFERENCES public.knowledge_snippets(id, business_id) ON DELETE CASCADE,
   CONSTRAINT agent_knowledge_opt_outs_one_item_check CHECK (num_nonnulls(knowledge_document_id, knowledge_snippet_id) = 1)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS agent_knowledge_opt_outs_document_unique
@@ -66,10 +76,11 @@ CREATE INDEX IF NOT EXISTS agent_knowledge_opt_outs_business_idx ON public.agent
 CREATE TABLE IF NOT EXISTS public.agent_service_opt_outs (
   business_id uuid NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
   agent_id uuid NOT NULL,
-  service_id uuid NOT NULL REFERENCES public.services(id) ON DELETE CASCADE,
+  service_id uuid NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (agent_id, service_id),
-  CONSTRAINT agent_service_opt_outs_agent_fk FOREIGN KEY (agent_id, business_id) REFERENCES public.agents(id, business_id) ON DELETE CASCADE
+  CONSTRAINT agent_service_opt_outs_agent_fk FOREIGN KEY (agent_id, business_id) REFERENCES public.agents(id, business_id) ON DELETE CASCADE,
+  CONSTRAINT agent_service_opt_outs_service_fk FOREIGN KEY (service_id, business_id) REFERENCES public.services(id, business_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS agent_service_opt_outs_business_idx ON public.agent_service_opt_outs (business_id);
 

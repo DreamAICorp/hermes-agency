@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { appointments, businessMemberships, businesses, calls, contacts, conversations, createDatabaseClient, messages, services, staff, users, widgetVisitors, withBusinessTransaction, type Database, type DatabaseTransaction } from "@lobbystack/db";
 
+import { getAnalytics } from "./analytics";
 import { getContactDetail, listContacts } from "./contacts";
 import { listCurrentAppointments, listRecentCalls, listUpcomingAppointments } from "./operatorActivity";
 import { listCalls } from "./voice";
@@ -115,6 +116,18 @@ describe.skipIf(!client)("operator contact and channel data under operator RLS",
 
       const named = await getContactDetail({ db }, { userId, businessId, contactId: ids.named });
       expect(named.activityCounts).toEqual({ calls: 1, messages: 2, appointments: 0, conversations: 2 });
+    });
+  });
+
+  it("gives website chats and web calls their own analytics channels and keeps the totals", async () => {
+    await rollbackTest(async (tx) => {
+      const { db, businessId, userId } = await seed(tx);
+      const to = new Date(Date.now() + 60_000);
+      const from = new Date(to.getTime() - 86_400_000);
+      const result = await getAnalytics({ db }, { userId, businessId, from, to, previousFrom: new Date(from.getTime() - 86_400_000), granularity: "day" });
+      // The staff reply in the website chat counts as website chat, not Other.
+      expect(result.channels).toEqual({ phone_call: 2, web_call: 1, sms: 2, web_chat: 4, other: 0 });
+      expect(Object.values(result.channels).reduce((sum, count) => sum + count, 0)).toBe(result.calls.current + result.messages.current);
     });
   });
 

@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 
-import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, ne, sql } from "drizzle-orm";
 
 import { agentRules, businessContextSnapshots, businessHours, businesses, closures, enqueueOutbox, knowledgeChunks, knowledgeDocuments, knowledgeSnippets, phoneNumbers, receptionistProfiles, services, storageObjects, websiteIngestionJobs, withBusinessTransaction, type DatabaseTransaction } from "@lobbystack/db";
-import { normalizeAppointmentChangePolicy, normalizeBookingMode, normalizeTransferMode, type BusinessContextSnapshot } from "@lobbystack/shared";
+import { getKnowledgeStorageLimitBytes, normalizeAppointmentChangePolicy, normalizeBookingMode, normalizeTransferMode, type BusinessContextSnapshot } from "@lobbystack/shared";
 import { buildBusinessContextSnapshot } from "../snapshot";
 import { fuseKnowledgeRanks, KNOWLEDGE_SEARCH_TOKEN_BUDGET, knowledgeLexicalQueries, knowledgeQueryTerms, withinKnowledgeBudget, type KnowledgePassage } from "../knowledgeRanking";
 import { countKnowledgeTokens } from "@lobbystack/ai";
@@ -15,6 +15,7 @@ import { getMeter } from "@lobbystack/telemetry/node";
 import { getPostHogDistinctIdForBusinessSystem } from "@lobbystack/telemetry";
 import { advanceOnboardingStageInTransaction } from "./onboarding";
 import { recordProductEvent } from "./productEvents";
+import { resolveBusinessBillingPlan } from "./contentRetentionPolicy";
 
 const ragMeter = getMeter("lobbystack-rag");
 const searchDuration = ragMeter.createHistogram("rag.search.duration_ms", { unit: "ms" });
@@ -312,6 +313,15 @@ async function indexDocumentTextInTransaction(tx: DatabaseTransaction, input: In
       await markKnowledgeDocumentFailedInTransaction(tx, input, document.revision, "Knowledge embeddings are unavailable or incomplete.");
       throw new Error("Knowledge embeddings are unavailable or incomplete.");
     }
+    const limit = getKnowledgeStorageLimitBytes(await resolveBusinessBillingPlan(tx, input.businessId));
+    if (limit !== null) {
+      const newBytes = chunks.reduce((total, chunk) => total + Buffer.byteLength(chunk, "utf8"), 0);
+      if (await getKnowledgeStorageUsageBytes(tx, input.businessId, { excludeDocumentId: input.documentId }) + newBytes > limit) {
+        // Retrying can't fit the text, so fail the document instead of throwing.
+        await markKnowledgeDocumentFailedInTransaction(tx, input, document.revision, knowledgeStorageLimitMessage(limit));
+        return { chunkCount: 0, indexed: false, documentId: input.documentId };
+      }
+    }
     await tx.delete(knowledgeChunks).where(and(eq(knowledgeChunks.documentId, input.documentId), eq(knowledgeChunks.businessId, input.businessId)));
     if (chunks.length > 0) {
       await tx.insert(knowledgeChunks).values(chunks.map((content, sequence) => ({
@@ -598,14 +608,16 @@ export async function refreshBusinessSnapshot(
   return version;
 }
 
-/** Counts uploaded files and extracted text in the canonical PostgreSQL representation. */
-export async function getKnowledgeStorageUsageBytes(tx: DatabaseTransaction, businessId: string): Promise<number> {
-  const [files, extracted] = await Promise.all([
-    tx.select({ bytes: sql<number>`coalesce(sum(${storageObjects.contentLength}), 0)` }).from(knowledgeDocuments)
-      .innerJoin(storageObjects, and(eq(knowledgeDocuments.storageObjectId, storageObjects.id), eq(storageObjects.businessId, businessId)))
-      .where(and(eq(knowledgeDocuments.businessId, businessId), sql`${storageObjects.status} <> 'deleted'`)),
-    tx.select({ bytes: sql<number>`coalesce(sum(octet_length(${knowledgeChunks.content})), 0)` }).from(knowledgeChunks)
-      .where(eq(knowledgeChunks.businessId, businessId)),
-  ]);
-  return Number(files[0]?.bytes ?? 0) + Number(extracted[0]?.bytes ?? 0);
+/**
+ * Counts the indexed text the receptionist searches, in UTF-8 bytes. Uploaded
+ * files don't count: a PDF's images and layout take space the agent never reads.
+ */
+export async function getKnowledgeStorageUsageBytes(tx: DatabaseTransaction, businessId: string, options: { excludeDocumentId?: string } = {}): Promise<number> {
+  const [extracted] = await tx.select({ bytes: sql<number>`coalesce(sum(octet_length(${knowledgeChunks.content})), 0)` }).from(knowledgeChunks)
+    .where(and(eq(knowledgeChunks.businessId, businessId), ...(options.excludeDocumentId ? [ne(knowledgeChunks.documentId, options.excludeDocumentId)] : [])));
+  return Number(extracted?.bytes ?? 0);
+}
+
+export function knowledgeStorageLimitMessage(limitBytes: number): string {
+  return `Knowledge storage limit reached. ${Math.ceil(limitBytes / 1024 / 1024)} MB of text is included on this plan.`;
 }

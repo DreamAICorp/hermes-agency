@@ -32,3 +32,12 @@ it("classifies only the embed surfaces as embeddable", () => {
 it("converts header records into the next.config header list shape", () => {
   expect(toNextHeaderList({ "X-Frame-Options": "DENY" })).toEqual([{ key: "X-Frame-Options", value: "DENY" }]);
 });
+
+it("allows company WebUI frames and delegates audio while keeping other controls", () => {
+ const headers=securityHeaders(env);
+ expect(headers["Content-Security-Policy"]).toContain("frame-src 'self' https://challenges.cloudflare.com https://hermes.dev.4u-corp.com https://*.dev.4u-corp.com");
+ expect(headers["Permissions-Policy"]).toContain('microphone=(self "https://hermes.dev.4u-corp.com" "https://*.dev.4u-corp.com")');
+ expect(headers["Permissions-Policy"]).toContain("camera=()");
+ expect(headers["Permissions-Policy"]).toContain("geolocation=()");
+ expect(headers["Content-Security-Policy"]).toContain("frame-ancestors 'none'");
+});

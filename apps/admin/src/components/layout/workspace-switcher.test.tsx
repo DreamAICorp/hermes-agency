@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useAgencyWorkspaces } from "@/lib/agency-workspaces";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { SidebarProvider } from "@/components/ui/sidebar";
 const router = vi.hoisted(() => ({ refresh: vi.fn() }));
@@ -15,6 +16,10 @@ beforeEach(() => {
   vi.stubGlobal("matchMedia", vi.fn(query => ({ matches: false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
 });
 afterEach(() => { cleanup(); clients.forEach(client => client.clear()); clients.length = 0; vi.unstubAllGlobals(); vi.clearAllMocks(); });
+function CurrentTenant() {
+ const workspaces=useAgencyWorkspaces();
+ return <div data-testid="current-tenant">{workspaces.data?.businesses.find(business=>business.active)?.businessId ?? "closed"}</div>;
+}
 function setup(name = "Tim Hortons", loading = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } }); clients.push(client);
   const businesses = [{ businessId: "business-1", name, active: true }, { businessId: "business-2", name: "Acme Clinic", active: false }];
@@ -27,7 +32,7 @@ function setup(name = "Tim Hortons", loading = false) {
     return Response.json({ phoneNumbers: [] });
   });
   vi.stubGlobal("fetch", fetchMock);
-  const view = render(<QueryClientProvider client={client}><SidebarProvider><WorkspaceSwitcher /></SidebarProvider></QueryClientProvider>);
+  const view = render(<QueryClientProvider client={client}><SidebarProvider><WorkspaceSwitcher /><CurrentTenant /></SidebarProvider></QueryClientProvider>);
   return { ...view, client, fetchMock };
 }
 describe("original workspace switcher behavior", () => {
@@ -55,6 +60,29 @@ describe("original workspace switcher behavior", () => {
     const { container } = setup("Tim Hortons", true);
     expect(container.querySelector('[data-slot="skeleton"]')).toBeTruthy();
     expect(screen.queryByRole("button")).toBeNull();
+  });
+  it("closes the old tenant before the switch request finishes", async () => {
+    const { fetchMock } = setup();
+    let committed=false;
+    let finish: (()=>void)|undefined;
+    fetchMock.mockImplementation(async (url:string)=>{
+      if(url==="/api/businesses/switch") {
+        await new Promise<void>(resolve=>{finish=resolve;});
+        committed=true;
+        return Response.json({ok:true});
+      }
+      return Response.json({businesses:[
+        {businessId:"business-1",name:"Tim Hortons",active:!committed},
+        {businessId:"business-2",name:"Acme Clinic",active:committed},
+      ]});
+    });
+    expect(screen.getByTestId("current-tenant").textContent).toBe("business-1");
+    await userEvent.click(screen.getByRole("button", { name: /Tim Hortons/ }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /Acme Clinic/ }));
+    await waitFor(()=>expect(finish).toBeDefined());
+    expect(screen.getByTestId("current-tenant").textContent).toBe("closed");
+    finish!();
+    await waitFor(()=>expect(screen.getByTestId("current-tenant").textContent).toBe("business-2"));
   });
   it("switches the workspace and discards the previous tenant's cached data", async () => {
     const { client, fetchMock } = setup();

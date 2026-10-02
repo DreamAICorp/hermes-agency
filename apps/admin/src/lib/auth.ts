@@ -489,7 +489,7 @@ function createAuth(adapterDatabase?: Parameters<typeof drizzleAdapter>[0]) {
   });
 }
 
-export type Session = { user: { id: string; name?: string | null; email?: string | null }; session: { id: string; userId: string; expiresAt: Date } } | null;
+export type Session = { user: { id: string; name?: string | null; email?: string | null; emailVerified?: boolean }; session: { id: string; userId: string; expiresAt: Date } } | null;
 
 export async function getSession(headers: Headers): Promise<Session> {
   return (await getAuth().api.getSession({ headers })) as Session;

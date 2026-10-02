@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { agencyTenantIdentity, ensureAgencyTenant } from "@/lib/agency-tenant-runtime";
 import { z } from "zod";
 import { createBusiness } from "@lobbystack/domain";
 import { asApiResponse, readJson, requireApiSession } from "@/lib/api-helpers";
@@ -20,6 +21,13 @@ export async function POST(request: Request) {
       ...parsed.data,
       businessType: "agency",
       workspaceKind: "agency",
+    });
+    // Creation remains durable even if the host coordinator is temporarily down.
+    // Opening an agent retries the same idempotent provision request.
+    after(async () => {
+      try {
+        await ensureAgencyTenant(await agencyTenantIdentity(request, created.businessId));
+      } catch { /* The agent view exposes the provisioning failure and retries. */ }
     });
     return NextResponse.json(created, { status: 201 });
   } catch (error) { return asApiResponse(error); }

@@ -41,5 +41,6 @@
   "createAgencyHelp": "Name your agency to open its cockpit.",
   "agencyName": "Agency name",
   "creating": "Creating…",
-  "createFailed": "Could not create the agency."
+  "createFailed": "Could not create the agency.",
+  "provisioning": "Preparing this company’s WebUI and agents…"
 }

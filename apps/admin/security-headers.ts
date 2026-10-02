@@ -22,7 +22,7 @@ export function securityHeaders(env: Record<string, string | undefined> = proces
       "img-src 'self' data: blob: https:",
       `connect-src 'self' ${posthogOrigin} https://challenges.cloudflare.com${recordingOrigin ? ` ${recordingOrigin}` : ""} wss:`,
       "font-src 'self' data:",
-      "frame-src 'self' https://challenges.cloudflare.com https://hermes.dev.4u-corp.com",
+      "frame-src 'self' https://challenges.cloudflare.com https://hermes.dev.4u-corp.com https://*.dev.4u-corp.com",
       "form-action 'self'",
       `media-src 'self' blob:${recordingOrigin ? ` ${recordingOrigin}` : ""}`,
       "worker-src 'self' blob:",
@@ -31,7 +31,7 @@ export function securityHeaders(env: Record<string, string | undefined> = proces
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "X-DNS-Prefetch-Control": "off",
-    "Permissions-Policy": "camera=(), microphone=(self), geolocation=()",
+    "Permissions-Policy": "camera=(), microphone=(self \"https://hermes.dev.4u-corp.com\" \"https://*.dev.4u-corp.com\"), geolocation=()",
   };
 }
 

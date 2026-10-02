@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Bot, ExternalLink, Settings2, Building2 } from "lucide-react";
 import { AgencyAgentWindow } from "@/components/agency-agent-window";
+import { useAgencyWorkspaces } from "@/lib/agency-workspaces";
 import { AgencyOverview } from "@/components/agency-overview";
 import { agencyAgents, findAgencyAgent } from "@/lib/agency-agents";
 import { WorkspaceSwitcher } from "@/components/layout/workspace-switcher";
@@ -15,6 +16,8 @@ import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupLabel, SidebarHeader
 export function AgencyShell({children,user}:{children:React.ReactNode;user:{name:string;email:string}}) {
  const { t }=useTranslation("agency");
  const pathname=usePathname();
+ const workspaces=useAgencyWorkspaces();
+ const businessId=workspaces.data?.businesses.find(business=>business.active)?.businessId;
  const agencyView=pathname==="/" || (pathname.startsWith("/agency/")&&pathname!=="/agency/create");
  const selectedAgent=findAgencyAgent(pathname.split("/agency/")[1] || "sona") || agencyAgents[0];
  const applications=[{href:"/",label:t("overview"),icon:LayoutDashboard},{href:"/agency/sona",label:"Agency",icon:Building2},{href:"https://hermes.dev.4u-corp.com/",label:t("customWebui"),icon:ExternalLink},{href:"https://hermes-webui.dev.4u-corp.com/",label:t("hermesWebui"),icon:Bot},{href:"https://hermes-admin.dev.4u-corp.com/",label:t("hermesAdmin"),icon:Settings2}];
@@ -38,6 +41,6 @@ export function AgencyShell({children,user}:{children:React.ReactNode;user:{name
    </SidebarContent>
 
   </Sidebar>
-  <SidebarInset className="min-h-0 overflow-hidden"><header className="flex h-14 shrink-0 items-center gap-3 border-b px-4"><SidebarTrigger title={t("cycleNavigation")} aria-label={t("cycleNavigation")}/><span className="text-sm text-muted-foreground">Agency</span></header><main id="dashboard-main-content" className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{agencyView?<><section data-agency-content className={expanded?"hidden":"hidden min-w-0 flex-1 flex-col overflow-hidden lg:flex"}>{pathname==="/"?children:<AgencyOverview/>}</section>{selectedAgent&&<aside data-agent-panel aria-label={t("agentSpace",{name:selectedAgent.name})} className={expanded?"flex min-h-0 min-w-0 flex-1 flex-col border-l bg-background":"flex min-h-0 w-full min-w-0 flex-col border-l bg-background lg:w-[42%] lg:min-w-[360px] xl:w-[38%]"}><AgencyAgentWindow agent={selectedAgent} expanded={expanded} onToggleExpanded={()=>setExpanded(v=>!v)}/></aside>}</>:<div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>}</main></SidebarInset>
+  <SidebarInset className="min-h-0 overflow-hidden"><header className="flex h-14 shrink-0 items-center gap-3 border-b px-4"><SidebarTrigger title={t("cycleNavigation")} aria-label={t("cycleNavigation")}/><span className="text-sm text-muted-foreground">Agency</span></header><main id="dashboard-main-content" className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{agencyView?<><section data-agency-content className={expanded?"hidden":"hidden min-w-0 flex-1 flex-col overflow-hidden lg:flex"}>{pathname==="/"?children:<AgencyOverview/>}</section>{selectedAgent&&businessId&&<aside data-agent-panel aria-label={t("agentSpace",{name:selectedAgent.name})} className={expanded?"flex min-h-0 min-w-0 flex-1 flex-col border-l bg-background":"flex min-h-0 w-full min-w-0 flex-col border-l bg-background lg:w-[42%] lg:min-w-[360px] xl:w-[38%]"}><AgencyAgentWindow key={businessId+":"+selectedAgent.id} agent={selectedAgent} businessId={businessId} expanded={expanded} onToggleExpanded={()=>setExpanded(v=>!v)}/></aside>}</>:<div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</div>}</main></SidebarInset>
  </SidebarProvider></TooltipProvider>;
 }

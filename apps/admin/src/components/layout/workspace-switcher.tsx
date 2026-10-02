@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { SidebarTeamSkeleton } from "@/components/loading-skeletons";
 import { recordPendingWorkspaceSwitch } from "@/lib/workspace-analytics";
@@ -11,24 +11,21 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { SidebarMenu, SidebarMenuItem, SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
-type Business = { businessId: string; name: string; active: boolean };
-async function getBusinesses(): Promise<{ businesses: Business[] }> {
-  const response = await fetch("/api/businesses", { credentials: "include" });
-  if (!response.ok) throw new Error("Unable to load workspaces.");
-  return await response.json() as { businesses: Business[] };
-}
+import { useAgencyWorkspaces } from "@/lib/agency-workspaces";
 export function WorkspaceSwitcher({compact=false,createHref="/onboarding/business?create=true",createLabel}:{compact?:boolean;createHref?:string;createLabel?:string}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { t } = useTranslation("nav");
   const { isMobile } = useSidebar();
-  const businesses = useQuery({ queryKey: ["businesses"], queryFn: getBusinesses });
+  const businesses = useAgencyWorkspaces();
   const [switching, setSwitching] = useState(false);
   const active = businesses.data?.businesses.find((business) => business.active) ?? businesses.data?.businesses[0];
 
   async function selectBusiness(businessId: string) {
     if (businessId === active?.businessId) return;
     setSwitching(true);
+    await queryClient.cancelQueries({ queryKey: ["businesses"] });
+    queryClient.setQueryData<{businesses: {businessId:string;name:string;active:boolean}[]}>(["businesses"], current => current ? { businesses: current.businesses.map(business => ({...business, active:false})) } : current);
     try {
       const response = await fetch("/api/businesses/switch", {
         method: "POST",
@@ -41,6 +38,10 @@ export function WorkspaceSwitcher({compact=false,createHref="/onboarding/busines
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "businesses" });
       await queryClient.invalidateQueries({ queryKey: ["businesses"] });
       router.refresh();
+    } catch {
+      // The response can be lost after the server commits the switch.
+      // Re-read the authoritative tenant instead of restoring a stale iframe.
+      await queryClient.invalidateQueries({ queryKey: ["businesses"] });
     } finally {
       setSwitching(false);
     }

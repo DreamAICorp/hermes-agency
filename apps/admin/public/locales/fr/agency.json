@@ -41,5 +41,6 @@
   "createAgencyHelp": "Donnez un nom à votre agence pour ouvrir son cockpit.",
   "agencyName": "Nom de l’agence",
   "creating": "Création…",
-  "createFailed": "La création de l’agence a échoué."
+  "createFailed": "La création de l’agence a échoué.",
+  "provisioning": "Préparation de la WebUI et des agents de cette entreprise…"
 }

@@ -38,6 +38,8 @@ export function recordLiveDelegation(domain: DomainContext, call: LiveCallTeleme
     totalMs: timing.totalMs,
     tools: [...new Set(timing.tools)],
     toolCount: timing.tools.length,
+    modelSteps: timing.modelSteps,
+    directAnswer: timing.directAnswer,
     failed: timing.failed,
   });
 }

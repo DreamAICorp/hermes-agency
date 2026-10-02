@@ -9,11 +9,14 @@ const mocks = vi.hoisted(() => ({
   snapshot: vi.fn(),
   recordProductEvent: vi.fn(async (..._args: unknown[]) => "event_1"),
   finishLiveCall: vi.fn(async (..._args: unknown[]) => false),
+  createAgentModel: vi.fn((..._args: unknown[]) => ({})),
+  createReceptionistAgent: vi.fn((..._args: unknown[]) => ({})),
 }));
 
 vi.mock("@lobbystack/agent-core", () => ({
-  createAgentModel: () => ({}),
-  createReceptionistAgent: () => ({}),
+  createAgentModel: mocks.createAgentModel,
+  createReceptionistAgent: mocks.createReceptionistAgent,
+  liveDelegationEnvironment: () => ({ AI_CHAT_REASONING_EFFORT: "low" }),
   LiveCallController: class {
     constructor(options: Record<string, (...args: never[]) => unknown>) {
       mocks.controllers += 1;
@@ -74,7 +77,21 @@ describe("live call latency telemetry", () => {
     return mocks.controllerOptions.at(-1)!;
   }
 
-  const delegation = { delegationId: "del_1", offsetMs: 4_000, transcriptWaitMs: 12, agentMs: 1_800, totalMs: 1_812, tools: ["getBusinessHours", "getBusinessHours"], answer: "We're open until 5.", failed: false };
+  const delegation = { delegationId: "del_1", offsetMs: 4_000, transcriptWaitMs: 12, agentMs: 1_800, totalMs: 1_812, tools: ["getBusinessHours", "getBusinessHours"], modelSteps: 1, directAnswer: true, answer: "We're open until 5.", failed: false };
+
+  it("answers delegations on the delegation model and speaks direct tool answers", async () => {
+    await startCall();
+    expect(mocks.createAgentModel).toHaveBeenLastCalledWith({ AI_CHAT_REASONING_EFFORT: "low" });
+    expect(mocks.createReceptionistAgent).toHaveBeenLastCalledWith(expect.objectContaining({ directToolAnswers: true }));
+  });
+
+  it("logs live.delegation with timings, tools and model steps", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const options = await startCall();
+    options.onDelegation!(delegation as never);
+    expect(info).toHaveBeenCalledWith(JSON.stringify({ event: "live.delegation", sessionId: "live_2", agentMs: 1_800, totalMs: 1_812, tools: ["getBusinessHours", "getBusinessHours"], modelSteps: 1, directAnswer: true, failed: false }));
+    info.mockRestore();
+  });
 
   it("records voice.delegation_completed with timings and tool names only", async () => {
     const options = await startCall();
@@ -85,7 +102,7 @@ describe("live call latency telemetry", () => {
       businessId: "biz_1",
       distinctId: "system:business:biz_1",
       actorType: "worker",
-      properties: { callId: "call_2", channel: "web_voice", provider: "openai_live", conversationId: "conv_2", agentMs: 1_800, totalMs: 1_812, tools: ["getBusinessHours"], toolCount: 2, failed: false },
+      properties: { callId: "call_2", channel: "web_voice", provider: "openai_live", conversationId: "conv_2", agentMs: 1_800, totalMs: 1_812, tools: ["getBusinessHours"], toolCount: 2, modelSteps: 1, directAnswer: true, failed: false },
     });
     expect(JSON.stringify(mocks.recordProductEvent.mock.calls)).not.toMatch(/open until|4165550100/);
   });

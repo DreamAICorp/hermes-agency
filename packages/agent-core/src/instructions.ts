@@ -1,6 +1,7 @@
 import { normalizeBookingMode, type BookingMode, type BusinessContextSnapshot } from "@lobbystack/shared";
 import { DateTime } from "luxon";
 
+import { describeClosure, describeServices, serviceFacts, upcomingClosures, weeklyHours } from "./businessFacts";
 import type { AgentChannel } from "./tools";
 
 function businessFacts(snapshot: BusinessContextSnapshot): string[] {
@@ -51,16 +52,38 @@ export function buildAgentInstructions(snapshot: BusinessContextSnapshot, channe
   ].filter(Boolean).join("\n\n");
 }
 
-// Instructions for GPT-Live itself: talk naturally, delegate anything that needs
-// a lookup or an action, and speak the backend's result.
-export function buildLiveInstructions(snapshot: BusinessContextSnapshot): string {
+// GPT-Live reads these at call start, so they stay well inside its context.
+const LIVE_MAX_SERVICES = 40;
+const LIVE_SERVICES_MAX_CHARS = 3_000;
+const LIVE_MAX_CLOSURES = 5;
+
+// Hours and services come from the call's snapshot, so GPT-Live answers them
+// itself instead of delegating and leaving the caller in silence.
+function liveBusinessFacts(snapshot: BusinessContextSnapshot, now: DateTime): string[] {
+  const timezone = snapshot.timezone;
+  const closures = upcomingClosures(snapshot, now).slice(0, LIVE_MAX_CLOSURES);
+  const services = serviceFacts(snapshot).slice(0, LIVE_MAX_SERVICES);
+  return [
+    `The call started on ${now.toFormat("cccc, LLLL d, yyyy, 'at' h:mm a")} (${timezone}).`,
+    snapshot.hours.length ? `Opening hours (${timezone}):\n${weeklyHours(snapshot).join("\n")}` : "",
+    closures.length ? `Upcoming closures: ${closures.map((closure) => describeClosure(closure, timezone)).join("; ")}.` : "",
+    services.length ? `Services:\n${describeServices(services, LIVE_SERVICES_MAX_CHARS)}` : "",
+  ].filter(Boolean);
+}
+
+// Instructions for GPT-Live itself: talk naturally, answer hours and services
+// from the facts below, delegate anything else that needs a lookup or an
+// action, and speak the backend's result.
+export function buildLiveInstructions(snapshot: BusinessContextSnapshot, now: DateTime = DateTime.now()): string {
   return [
     `You are the phone receptionist for ${snapshot.displayName}. You represent this business, not the software platform.`,
     `Greet the caller with: "${snapshot.greeting}"`,
     snapshot.voiceInstructions,
     "Speak briefly and warmly. Start in the language of the greeting and switch when the caller clearly uses another language.",
-    "Delegate to the backend whenever the caller asks about hours, services, prices or other business facts you can't answer from the summary below, wants an appointment or to change one, wants a person, or wants to leave a message. Tell the caller you're checking while you wait, then say the backend's answer naturally. When the caller says goodbye, delegate so the backend can end the call.",
+    "When the business facts below list the opening hours or the services, answer questions about them yourself without delegating.",
+    "Delegate to the backend whenever the caller asks about prices or other business facts not listed below, wants an appointment or to change one, wants a person, or wants to leave a message. Tell the caller you're checking while you wait, then say the backend's answer naturally. When the caller says goodbye, delegate so the backend can end the call.",
     "Never make up availability, prices, or policies.",
     `Business summary: ${snapshot.summary}`,
+    ...liveBusinessFacts(snapshot, now.setZone(snapshot.timezone)),
   ].join("\n\n");
 }

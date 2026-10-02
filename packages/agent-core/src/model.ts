@@ -107,6 +107,28 @@ export function callSummaryEnvironment(environment: AgentModelEnvironment = proc
   return summary;
 }
 
+const DEFAULT_DELEGATION_REASONING_EFFORT: ReasoningEffort = "low";
+
+// The agent behind a GPT-Live call answers while the caller waits in silence,
+// and each step on high reasoning costs seconds. AI_DELEGATION_MODEL picks a
+// different model on the AI_CHAT_* endpoint for that work;
+// AI_DELEGATION_REASONING_EFFORT defaults to low. Website chat keeps AI_CHAT_*.
+export function liveDelegationEnvironment(environment: AgentModelEnvironment = process.env): AgentModelEnvironment {
+  const chatModel = agentModelId(environment).model;
+  const delegationModel = environment.AI_DELEGATION_MODEL?.trim() || chatModel;
+  const effort = environment.AI_DELEGATION_REASONING_EFFORT?.trim();
+  const delegation: AgentModelEnvironment = {
+    ...environment,
+    AI_CHAT_MODEL: delegationModel,
+    AI_CHAT_REASONING_EFFORT: (REASONING_EFFORTS as readonly string[]).includes(effort ?? "") ? effort : DEFAULT_DELEGATION_REASONING_EFFORT,
+  };
+  if (delegationModel !== chatModel) {
+    delete delegation.AI_CHAT_INPUT_COST_PER_MILLION_TOKENS;
+    delete delegation.AI_CHAT_OUTPUT_COST_PER_MILLION_TOKENS;
+  }
+  return delegation;
+}
+
 // OpenAI itself gets the Responses API: its reasoning models only accept
 // tools with reasoning turned on there. Any other OpenAI-compatible endpoint
 // gets chat completions, which is all most of them speak.

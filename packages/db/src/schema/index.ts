@@ -383,6 +383,9 @@ export const widgetVisitors = pgTable(
     id: uuid("id").primaryKey(),
     businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
     contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    // When the visitor was last linked to a contact. Deleting the contact clears
+    // contact_id but not this, so a later link only takes chats that started after it.
+    contactLinkedAt: timestamp("contact_linked_at", { withTimezone: true }),
     name: text("name"),
     email: text("email"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),

@@ -6,33 +6,27 @@ import { requireBusinessAdmin, requireBusinessMembership } from "../authz";
 import type { DomainContext } from "./context";
 
 /**
- * The stored channel values a contact used: call transports, conversation
- * channels, and website chats from a widget visitor linked to the contact.
- * A call's conversation is always `voice`, so call transports decide between
- * phone and web calls.
+ * The stored channel values a contact used: call transports and conversation
+ * channels. A call's conversation is always `voice`, so call transports decide
+ * between phone and web calls. Website chats carry their contact on the
+ * conversation, so a widget visitor linked to the contact later adds nothing.
  */
 function contactChannelsSql(businessId: string) {
   return sql<string[]>`array(
     select "channel_calls"."transport" from "calls" as "channel_calls" where "channel_calls"."contact_id" = "contacts"."id" and "channel_calls"."business_id" = ${businessId}
     union
     select "channel_conversations"."channel" from "conversations" as "channel_conversations" where "channel_conversations"."contact_id" = "contacts"."id" and "channel_conversations"."business_id" = ${businessId} and "channel_conversations"."channel" <> 'voice'
-    union
-    select "visitor_conversations"."channel" from "conversations" as "visitor_conversations" inner join "widget_visitors" as "channel_visitors" on "channel_visitors"."id" = "visitor_conversations"."widget_visitor_id" and "channel_visitors"."business_id" = ${businessId} where "channel_visitors"."contact_id" = "contacts"."id" and "visitor_conversations"."business_id" = ${businessId}
     order by 1
   )`;
 }
 
 /**
- * A contact's conversation ids: conversations linked to the contact directly,
- * plus website chats from a widget visitor linked to the contact. `union`
- * keeps a conversation reachable both ways from counting twice.
+ * A contact's conversation ids. Website chats count only when the conversation
+ * itself names the contact: the link is set when the chat starts or when its
+ * visitor first identifies, and never follows the visitor to a later contact.
  */
 function contactConversationIdsSql(businessId: string, contactId: SQL) {
-  return sql`(
-    select "owned_conversations"."id" from "conversations" as "owned_conversations" where "owned_conversations"."business_id" = ${businessId} and "owned_conversations"."contact_id" = ${contactId}
-    union
-    select "visitor_conversations"."id" from "conversations" as "visitor_conversations" inner join "widget_visitors" as "conversation_visitors" on "conversation_visitors"."id" = "visitor_conversations"."widget_visitor_id" and "conversation_visitors"."business_id" = ${businessId} where "conversation_visitors"."contact_id" = ${contactId} and "visitor_conversations"."business_id" = ${businessId}
-  )`;
+  return sql`(select "owned_conversations"."id" from "conversations" as "owned_conversations" where "owned_conversations"."business_id" = ${businessId} and "owned_conversations"."contact_id" = ${contactId})`;
 }
 
 export async function listContacts(
@@ -114,7 +108,9 @@ export async function deleteContact(
     if (!contact) return false;
     const [linkedCalls, linkedConversations, linkedAppointments] = await Promise.all([
       tx.select({ id: calls.id }).from(calls).where(and(eq(calls.businessId, input.businessId), eq(calls.contactId, input.contactId))).limit(1),
-      tx.select({ id: conversations.id }).from(conversations).where(and(eq(conversations.businessId, input.businessId), eq(conversations.contactId, input.contactId))).limit(1),
+      // Also count chats from the contact's widget visitors, so a chat that is not
+      // attributed yet keeps the contact, and its visitor link, in place.
+      tx.select({ id: conversations.id }).from(conversations).where(and(eq(conversations.businessId, input.businessId), or(eq(conversations.contactId, input.contactId), sql`${conversations.widgetVisitorId} in (select "linked_visitors"."id" from "widget_visitors" as "linked_visitors" where "linked_visitors"."business_id" = ${input.businessId} and "linked_visitors"."contact_id" = ${input.contactId})`))).limit(1),
       tx.select({ id: appointments.id }).from(appointments).where(and(eq(appointments.businessId, input.businessId), eq(appointments.contactId, input.contactId))).limit(1),
     ]);
     if (linkedCalls.length || linkedConversations.length || linkedAppointments.length) {

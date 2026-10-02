@@ -22,7 +22,7 @@ export function securityHeaders(env: Record<string, string | undefined> = proces
       "img-src 'self' data: blob: https:",
       `connect-src 'self' ${posthogOrigin} https://challenges.cloudflare.com${recordingOrigin ? ` ${recordingOrigin}` : ""} wss:`,
       "font-src 'self' data:",
-      "frame-src 'self' https://challenges.cloudflare.com",
+      "frame-src 'self' https://challenges.cloudflare.com https://hermes.dev.4u-corp.com",
       "form-action 'self'",
       `media-src 'self' blob:${recordingOrigin ? ` ${recordingOrigin}` : ""}`,
       "worker-src 'self' blob:",

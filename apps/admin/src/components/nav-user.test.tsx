@@ -9,14 +9,23 @@ vi.mock("./theme-provider", () => ({ useTheme: () => theme }));
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 beforeEach(() => { window.innerWidth = 1440; theme.resolvedTheme = "light"; vi.stubGlobal("matchMedia", vi.fn(query => ({ matches: false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() }))); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
-async function setup(upgrade = false) {
+async function setup(upgrade = false, compact = false) {
   const onUpgrade = vi.fn(); const onSignOut = vi.fn();
-  render(<SidebarProvider><NavUser user={{ email: "operator@example.invalid", name: "Operator", avatar: "" }} onSignOut={onSignOut} showUpgradeToPro={upgrade} onUpgradeToPro={onUpgrade} /></SidebarProvider>);
+  render(<SidebarProvider><NavUser user={{ email: "operator@example.invalid", name: "Operator", avatar: "" }} onSignOut={onSignOut} compact={compact} showAccountSettings={!compact} showUpgradeToPro={upgrade} onUpgradeToPro={onUpgrade} /></SidebarProvider>);
   await userEvent.click(screen.getByRole("button", { name: /operator@example.invalid/ }));
   await screen.findByRole("menu");
   return { onUpgrade, onSignOut };
 }
 describe("original account menu interactions", () => {
+  it("keeps the cockpit account menu accessible without Garage settings", async () => {
+    const { onSignOut } = await setup(false, true);
+    expect(screen.queryByRole("menuitem", { name: "sidebar.account" })).toBeNull();
+    await userEvent.click(screen.getByRole("menuitem", { name: "sidebar.toggleTheme" }));
+    expect(theme.setTheme).toHaveBeenCalledWith("dark");
+    await userEvent.click(screen.getByRole("menuitem", { name: "sidebar.signOut" }));
+    expect(onSignOut).toHaveBeenCalledOnce();
+  });
+
   it("hides the upgrade action when unavailable", async () => { await setup(); expect(screen.queryByRole("menuitem", { name: "sidebar.upgradeToPro" })).toBeNull(); });
   it("opens the supplied upgrade dialog directly", async () => {
     const { onUpgrade } = await setup(true); await userEvent.click(screen.getByRole("menuitem", { name: "sidebar.upgradeToPro" })); expect(onUpgrade).toHaveBeenCalledOnce();

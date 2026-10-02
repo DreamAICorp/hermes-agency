@@ -10,14 +10,14 @@ import { recordPendingWorkspaceSwitch } from "@/lib/workspace-analytics";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from "@/components/ui/item";
-import { SidebarMenu, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
+import { SidebarMenu, SidebarMenuItem, SidebarMenuButton, useSidebar } from "@/components/ui/sidebar";
 type Business = { businessId: string; name: string; active: boolean };
 async function getBusinesses(): Promise<{ businesses: Business[] }> {
   const response = await fetch("/api/businesses", { credentials: "include" });
   if (!response.ok) throw new Error("Unable to load workspaces.");
   return await response.json() as { businesses: Business[] };
 }
-export function WorkspaceSwitcher() {
+export function WorkspaceSwitcher({compact=false,createHref="/onboarding/business?create=true",createLabel}:{compact?:boolean;createHref?:string;createLabel?:string}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { t } = useTranslation("nav");
@@ -46,14 +46,14 @@ export function WorkspaceSwitcher() {
     }
   }
 
-  if (businesses.isLoading) return <SidebarMenu className="group-data-[collapsible=icon]:hidden"><SidebarMenuItem><SidebarTeamSkeleton /></SidebarMenuItem></SidebarMenu>;
+  if (businesses.isLoading) return <SidebarMenu className={compact?"w-full":"group-data-[collapsible=icon]:hidden"}><SidebarMenuItem><SidebarTeamSkeleton /></SidebarMenuItem></SidebarMenu>;
 
   return (
-    <SidebarMenu className="group-data-[collapsible=icon]:hidden">
+    <SidebarMenu className={compact?"w-full":"group-data-[collapsible=icon]:hidden"}>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={
+            render={compact ? <SidebarMenuButton disabled={switching} className="size-10 justify-center p-0" title={active?.name ?? t("sidebar.businessSlugFallback")} aria-label={active?.name ?? t("sidebar.businessSlugFallback")} tooltip={{children:active?.name ?? t("sidebar.businessSlugFallback"),hidden:false}} /> :
               <Item
                 className="w-full gap-2 rounded-lg px-2 py-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[popup-open=true]:bg-sidebar-accent data-[popup-open=true]:text-sidebar-accent-foreground"
                 render={<button disabled={switching} type="button" />}
@@ -62,12 +62,12 @@ export function WorkspaceSwitcher() {
             }
           >
             <ItemMedia><WorkspaceInitial name={active?.name} /></ItemMedia>
-            <ItemContent className="min-w-0">
+            {!compact&&<ItemContent className="min-w-0">
               <ItemTitle className="ph-mask w-full truncate text-left font-medium">
                 {active?.name ?? t("sidebar.businessSlugFallback")}
               </ItemTitle>
-            </ItemContent>
-            <ItemActions><ChevronsUpDown className="size-4 text-muted-foreground" /></ItemActions>
+            </ItemContent>}
+            {!compact&&<ItemActions><ChevronsUpDown className="size-4 text-muted-foreground" /></ItemActions>}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="min-w-56 rounded-xl" side={isMobile ? "bottom" : "right"} sideOffset={4}>
             <DropdownMenuGroup>
@@ -79,9 +79,9 @@ export function WorkspaceSwitcher() {
               ))}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2.5 px-3 py-2" render={<Link href="/onboarding/business?create=true" />}>
+            <DropdownMenuItem className="gap-2.5 px-3 py-2" render={<Link href={createHref} />}>
               <Plus className="size-4" />
-              {t("sidebar.createBusiness")}
+              {createLabel ?? t("sidebar.createBusiness")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

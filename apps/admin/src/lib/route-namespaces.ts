@@ -1,6 +1,6 @@
 import { stripLocalePrefix } from "./locale-path";
 
-export const PUBLIC_ROUTE_NAMESPACES = ["common", "auth", "onboarding", "demos", "widget"] as const;
+export const PUBLIC_ROUTE_NAMESPACES = ["common", "auth", "onboarding", "demos", "widget", "agency"] as const;
 
 export function routeNamespaces(pathname: string): string[] {
   const section = stripLocalePrefix(pathname).split("/")[1] ?? "";
@@ -15,5 +15,5 @@ export function routeNamespaces(pathname: string): string[] {
     settings: ["widget"], "setup-guide": [],
   };
   // These namespaces belong to the shared dashboard navigation and dialogs.
-  return [...new Set(["common", "nav", "settings", "agent", ...(route[section] ?? ["dashboard"])])];
+  return [...new Set(["agency", "common", "nav", "settings", "agent", ...(route[section] ?? ["dashboard"])])];
 }

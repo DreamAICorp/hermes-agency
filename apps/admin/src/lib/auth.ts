@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { emailOTP } from "better-auth/plugins/email-otp";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import { APIError, createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { runWithAdapter } from "@better-auth/core/context";
 import Redis from "ioredis";
@@ -37,6 +38,48 @@ function assertAuthDatabaseRoles(): Promise<void> {
   );
   return databaseRolesReady;
 }
+
+const googleBrokerSessionEndpoint = createAuthEndpoint("/google-broker/session", {
+  method: "POST",
+  body: z.object({
+    email: z.string().email(),
+    googleId: z.string().min(1).max(255),
+    name: z.string().max(200).optional(),
+    image: z.string().url().max(2048).optional(),
+  }),
+}, async (ctx) => {
+  const expected = process.env.INTERNAL_SERVICE_SECRET;
+  const supplied = ctx.headers?.get("x-internal-service-secret") ?? "";
+  if (!expected || supplied.length !== expected.length || !Buffer.from(supplied).equals(Buffer.from(expected))) {
+    throw new APIError("UNAUTHORIZED", { message: "Invalid internal request." });
+  }
+  const email = ctx.body.email.trim().toLowerCase();
+  const owner = await ctx.context.internalAdapter.findAccountOwnerByKey({ providerId: "google", accountId: ctx.body.googleId });
+  if (owner && owner.kind !== "owned") {
+    throw new APIError("UNAUTHORIZED", { message: "This Google account is linked to another Garage Martin user." });
+  }
+  // A previously linked Google subject is authoritative. Google can change or
+  // alias the email claim while keeping the stable subject; resolve that link
+  // before trying the mutable email address.
+  const identity = owner ? null : await ctx.context.internalAdapter.findUserByEmail(email, { includeAccounts: true });
+  let user = owner?.user ?? identity?.user;
+  if (!user && process.env.AGENCY_PRIMARY_BUSINESS_ID) {
+    user = await ctx.context.internalAdapter.createUser({ email, name: ctx.body.name ?? email, emailVerified: true, image: ctx.body.image ?? null }, { method: "oauth", oauth: { providerId: "google", profile: { sub: ctx.body.googleId, email, email_verified: true } } });
+  }
+  if (!user) throw new APIError("UNAUTHORIZED", { message: "No account exists for this Google email." });
+  if (!owner && !(identity?.accounts ?? []).some((account) => account.providerId === "google" && account.accountId === ctx.body.googleId)) {
+    await ctx.context.internalAdapter.linkAccount({ userId: user.id, providerId: "google", accountId: ctx.body.googleId });
+  }
+  const verifiedUser = user.emailVerified ? user : await ctx.context.internalAdapter.updateUser(user.id, { emailVerified: true });
+  const session = await ctx.context.internalAdapter.createSession(user.id);
+  await setSessionCookie(ctx, { session, user: verifiedUser });
+  return ctx.json({ ok: true });
+});
+
+const googleBrokerSessionPlugin = {
+  id: "garage-martin-google-broker-session",
+  endpoints: { googleBrokerSession: googleBrokerSessionEndpoint },
+};
 
 const enabledEmailOtpPaths = new Set([
   "/email-otp/request-password-reset",
@@ -256,7 +299,7 @@ function createAuth(adapterDatabase?: Parameters<typeof drizzleAdapter>[0]) {
       // the shared per-path bucket rather than trusting a spoofable value.
       ...(trustedIpHeader ? { ipAddress: { ipAddressHeaders: [trustedIpHeader] } } : {}),
     },
-    plugins: [...mcpOAuthPlugins(), emailOTP({
+    plugins: [...mcpOAuthPlugins(), googleBrokerSessionPlugin, emailOTP({
       disableSignUp: true,
       storeOTP: "hashed",
       expiresIn: 600,

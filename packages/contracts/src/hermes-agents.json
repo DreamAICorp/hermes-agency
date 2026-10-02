@@ -1,0 +1,65 @@
+[
+  {
+    "id": "sona",
+    "name": "Sona",
+    "role": "Supervision entreprise",
+    "group": "Direction",
+    "kind": "persistent_profile"
+  },
+  {
+    "id": "cto",
+    "name": "CTO",
+    "role": "Direction technique",
+    "group": "Technique",
+    "kind": "persistent_profile"
+  },
+  {
+    "id": "developer",
+    "name": "Developer",
+    "role": "Développement",
+    "group": "Technique",
+    "kind": "persistent_profile"
+  },
+  {
+    "id": "qa",
+    "name": "QA",
+    "role": "Validation",
+    "group": "Technique",
+    "kind": "persistent_profile"
+  },
+  {
+    "id": "devops",
+    "name": "DevOps",
+    "role": "Infrastructure",
+    "group": "Technique",
+    "kind": "persistent_profile"
+  },
+  {
+    "id": "product",
+    "name": "Product",
+    "role": "Produit",
+    "group": "Direction",
+    "kind": "persistent_profile"
+  },
+  {
+    "id": "sales",
+    "name": "Sales",
+    "role": "Commercial",
+    "group": "Croissance",
+    "kind": "persistent_profile"
+  },
+  {
+    "id": "marketing",
+    "name": "Marketing",
+    "role": "Marketing",
+    "group": "Croissance",
+    "kind": "persistent_profile"
+  },
+  {
+    "id": "researcher",
+    "name": "Researcher",
+    "role": "Recherche",
+    "group": "Recherche",
+    "kind": "persistent_profile"
+  }
+]

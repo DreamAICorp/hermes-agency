@@ -1,0 +1,28 @@
+name: hermes-agency-ui
+services:
+  agency:
+    image: 4u/hermes-agency:20261002-global-navigation-v2
+    container_name: hermes-agency-ui
+    restart: unless-stopped
+    network_mode: host
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 127.0.0.1
+      PORT: 13004
+      BETTER_AUTH_USE_SECURE_COOKIES: "true"
+      NODE_EXTRA_CA_CERTS: /etc/4u/broker-rootCA.pem
+    volumes:
+      - ./broker-rootCA.pem:/etc/4u/broker-rootCA.pem:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,noexec,size=32m,uid=1001,gid=1001,mode=0700
+      - /app/apps/admin/.next/cache:rw,nosuid,noexec,size=64m,uid=1001,gid=1001,mode=0700
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    mem_limit: 2g
+    cpus: 2
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "3"}

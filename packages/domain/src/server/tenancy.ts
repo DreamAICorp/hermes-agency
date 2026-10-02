@@ -18,6 +18,7 @@ export type CreateBusinessInput = {
   timezone: string;
   businessType: string;
   deploymentMode?: string;
+  workspaceKind?: "receptionist" | "agency";
 };
 
 function cleanSlug(slug: string): string {
@@ -49,7 +50,7 @@ export async function createBusiness(
         timezone: input.timezone,
         businessType: input.businessType,
         deploymentMode: input.deploymentMode ?? "cloud",
-        onboardingStage: "website",
+        onboardingStage: input.workspaceKind === "agency" ? "complete" : "website",
       });
       // Only generated slugs are replaceable. Target this constraint explicitly
       // so unrelated insert failures still roll back the transaction.
@@ -70,6 +71,7 @@ export async function createBusiness(
     }
     // Booking assigns every appointment to a staff member. Businesses that don't
     // manage a team get one hidden member that stands for the business itself.
+    if (input.workspaceKind !== "agency") {
     await tx.insert(staff).values({ businessId, name: input.name.trim(), timezone: input.timezone });
     await tx.insert(receptionistProfiles).values({
       businessId,
@@ -82,8 +84,9 @@ export async function createBusiness(
       transferMode: "on_request",
       appointmentChangePolicy: defaultAppointmentChangePolicy,
     });
+    }
     await tx.update(users).set({ activeBusinessId: businessId, updatedAt: new Date() }).where(eq(users.id, input.userId));
-    await enqueueOutbox(tx, {
+    if (input.workspaceKind !== "agency") await enqueueOutbox(tx, {
       topic: "snapshot.refresh",
       businessId,
       aggregateType: "business",

@@ -1,5 +1,2 @@
-import { LiveOverviewSurface } from "@/components/live-overview-surface";
-
-export default function HomePage() {
-  return <LiveOverviewSurface />;
-}
+import { AgencyOverview } from "@/components/agency-overview";
+export default function HomePage() { return <AgencyOverview/>; }

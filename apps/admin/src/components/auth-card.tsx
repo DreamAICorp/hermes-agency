@@ -32,7 +32,8 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
     const params = new URLSearchParams(window.location.search);
     setReturnTo(getSafeReturnTo(params.get("returnTo")));
     setSignupSource(params.get("source") === "calculator" ? "calculator" : null);
-  }, []);
+    if (params.get("google") === "error") setError(t("errors.googleSignInFailed"));
+  }, [t]);
   function authPath(path: "/login" | "/signup") {
     const target = buildAuthPathWithReturnTo(path, returnTo, authLocale);
     return signupSource ? `${target}${target.includes("?") ? "&" : "?"}source=${signupSource}` : target;
@@ -41,6 +42,7 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [verificationPending, setVerificationPending] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationError, setVerificationError] = useState<string | null>(null);
@@ -81,6 +83,15 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
       body: JSON.stringify({ referralCode, visitorId: getAffiliateVisitorId(), sourceUrl: `${window.location.origin}${window.location.pathname}` }),
     });
   }, [mode]);
+
+  function startGoogleSignIn() {
+    setError(null);
+    setGoogleLoading(true);
+    const target = new URL("/api/auth/google/start", window.location.origin);
+    target.searchParams.set("locale", authLocale);
+    if (returnTo) target.searchParams.set("returnTo", returnTo);
+    window.location.assign(target.toString());
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -276,6 +287,11 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
   return (
     <ReplacementOnboardingShell legalFooter={legalFooter} progress={login ? null : { current: 1, total: 8 }} title={login ? t("login.title") : t("signup.title")} width="sm">
       <div className="flex w-full flex-col gap-6">
+        {login ? <div className="flex flex-col gap-3">
+          <Button className="h-11 w-full" disabled={googleLoading} loading={googleLoading} loadingLabel={t("login.googleLoading")} onClick={startGoogleSignIn} type="button">{t("login.google")}</Button>
+          <p className="text-center text-xs text-muted-foreground">{t("login.googleBroker")}</p>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" /><span>{t("login.or")}</span><span className="h-px flex-1 bg-border" /></div>
+        </div> : null}
         <form onSubmit={submit}>
           <FieldGroup className="gap-4">
             <Field data-invalid={hasBlurredEmail && email.length > 0 && !isEmailValid ? true : undefined}><FieldLabel htmlFor="auth-email">{login ? t("login.email") : t("signup.email")}</FieldLabel><Input aria-invalid={hasBlurredEmail && email.length > 0 && !isEmailValid} autoComplete="email" className={cn("h-11", hasBlurredEmail && email.length > 0 && !isEmailValid && "border-destructive text-destructive focus-visible:border-destructive focus-visible:ring-destructive/20")} id="auth-email" onBlur={() => setHasBlurredEmail(true)} onChange={(event) => { setHasBlurredEmail(false); setEmail(event.target.value); }} placeholder={login ? t("login.emailPlaceholder") : t("signup.emailPlaceholder")} required type="email" value={email} />{hasBlurredEmail && email.length > 0 && !isEmailValid ? <FieldError className="flex items-center gap-2 font-medium"><TriangleAlert className="size-4 shrink-0" aria-hidden="true" /><span>{t(login ? "login.emailInvalid" : "signup.emailInvalid")}</span></FieldError> : null}</Field>

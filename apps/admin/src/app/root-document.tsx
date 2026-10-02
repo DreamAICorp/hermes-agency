@@ -4,8 +4,8 @@ import type { SupportedLocale } from "@/lib/locale";
 import type { LocaleSource } from "@/lib/locale-request";
 
 export const appMetadata = {
-  title: "LobbyStack",
-  description: "AI receptionist dashboard",
+  title: "Hermès · Agency",
+  description: "Cockpit entreprise Hermès",
 };
 
 export function RootDocument({

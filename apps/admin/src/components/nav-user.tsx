@@ -122,6 +122,8 @@ type NavUserProps = {
   showUpgradeToPro?: boolean;
   user: User;
   isLoading?: boolean;
+  compact?: boolean;
+  showAccountSettings?: boolean;
 };
 
 export function NavUser({
@@ -130,11 +132,14 @@ export function NavUser({
   showUpgradeToPro = false,
   user,
   isLoading = false,
+  compact = false,
+  showAccountSettings = true,
 }: NavUserProps) {
   const { t } = useTranslation("nav");
   const [open, setOpen] = useState(false);
   const { isMobile } = useSidebar();
   const { resolvedTheme, setTheme } = useTheme();
+  const accountLabel = [user.name, user.email].filter(Boolean).join(" · ");
   const emailInitial = user.email.trim().charAt(0).toUpperCase() || "?";
   const toggleTheme = () => setTheme(resolvedTheme === "dark" ? "light" : "dark");
   const accountIconRef = useRef<UserIconHandle>(null);
@@ -160,8 +165,11 @@ export function NavUser({
             aria-expanded={open}
             render={
               <SidebarMenuButton
-                className="data-[popup-open=true]:bg-sidebar-accent data-[popup-open=true]:text-sidebar-accent-foreground"
+                className={compact?"size-10 justify-center p-0 data-[popup-open=true]:bg-sidebar-accent":"data-[popup-open=true]:bg-sidebar-accent data-[popup-open=true]:text-sidebar-accent-foreground"}
                 size="lg"
+                title={accountLabel}
+                aria-label={accountLabel}
+                tooltip={compact?{children:accountLabel,hidden:false}:accountLabel}
               />
             }
           >
@@ -169,10 +177,10 @@ export function NavUser({
               <AvatarImage src={user.avatar} alt={user.name} />
               <AvatarFallback>{emailInitial}</AvatarFallback>
             </Avatar>
-            <div className="grid flex-1 text-start text-sm leading-tight">
+            {!compact&&<div className="grid flex-1 text-start text-sm leading-tight">
               <span className="truncate text-sm">{user.email}</span>
-            </div>
-            <ChevronsUpDown className="ms-auto size-4" />
+            </div>}
+            {!compact&&<ChevronsUpDown className="ms-auto size-4" />}
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
@@ -204,7 +212,7 @@ export function NavUser({
               </>
             ) : null}
             <DropdownMenuGroup>
-              <DropdownMenuItem
+              {showAccountSettings&&<DropdownMenuItem
                 onBlur={() => stopIconAnimation(accountIconRef)}
                 onFocus={() => startIconAnimation(accountIconRef)}
                 onMouseEnter={() => startIconAnimation(accountIconRef)}
@@ -213,7 +221,7 @@ export function NavUser({
               >
                 <UserIcon ref={accountIconRef} size={16} />
                 {t("sidebar.account")}
-              </DropdownMenuItem>
+              </DropdownMenuItem>}
               <DropdownMenuItem
                 closeOnClick={false}
                 onClick={toggleTheme}

@@ -78,6 +78,7 @@ export const SCHEMA_MIGRATIONS = [
   "0070_product_events_compact.sql",
   "0071_prospect_demo_operator_detach.sql",
   "0072_detach_closed_prospect_demo_operators.sql",
+  "0073_widget_chat_contacts.sql",
 ] as const;
 
 const CONCURRENT_INDEX_DIRECTIVE = /^-- lobbystack:concurrent-index ([a-z][a-z0-9_]*)$/m;

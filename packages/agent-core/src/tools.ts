@@ -146,7 +146,7 @@ export function createReceptionistTools(context: AgentToolContext): ToolSet {
         callbackWindow: z.string().optional().describe("When the caller prefers to be called back, in their words."),
       }),
       execute: async (input) => {
-        const callbackPhone = input.callbackPhone ?? context.callerPhone;
+        const callbackPhone = input.callbackPhone?.trim() || context.callerPhone;
         return await takeMessageForStaff(domain, {
           businessId,
           message: input.message,
@@ -164,7 +164,7 @@ export function createReceptionistTools(context: AgentToolContext): ToolSet {
 
   if (bookingMode === "instant") {
     tools.findAvailability = tool({
-      description: "Find open appointment times for one service on one date. Never state availability without calling this.",
+      description: "Find open appointment times for one service on one date. Never state availability without calling this. Don't use it to recheck a time the caller already accepted; bookAppointment checks that.",
       inputSchema: z.object({
         serviceName: z.string().describe("One of the business's services."),
         date: z.string().describe("Date as YYYY-MM-DD in the business's timezone."),
@@ -184,23 +184,30 @@ export function createReceptionistTools(context: AgentToolContext): ToolSet {
       },
     });
     tools.bookAppointment = tool({
-      description: "Book an appointment at a time findAvailability returned, after the caller confirms the service and time. On phone calls, ask first whether you may text a confirmation and reminder, and pass their answer.",
+      description: "Book an appointment once the caller accepts a time you offered. It checks the time is still open, so don't call findAvailability again first. On phone calls, ask first whether you may text a confirmation and reminder, and pass their answer.",
       inputSchema: z.object({
         serviceName: z.string(),
-        startsAt: z.string().describe("The exact startsAt value returned by findAvailability."),
-        contactName: z.string().optional(),
+        startsAt: z.string().describe("A startsAt value from findAvailability, or the accepted time as YYYY-MM-DDTHH:mm in the business's timezone."),
+        contactName: z.string().optional().describe("The caller's name. Required to book."),
         contactPhone: phone.optional().describe("Required when the caller's number isn't already known."),
         smsConsentGranted: z.boolean().describe("True only if the caller agreed to receive a confirmation and reminder text."),
       }),
       execute: async (input) => {
-        const contactPhone = input.contactPhone ?? context.callerPhone;
+        const contactPhone = input.contactPhone?.trim() || context.callerPhone;
+        if (!input.contactName?.trim()) return { ok: false, reason: "Ask for the caller's name before booking." };
         if (!contactPhone) return { ok: false, reason: "Ask for a phone number before booking." };
-        const opening = await checkOpening(domain, { businessId, serviceName: input.serviceName, startsAt: input.startsAt, timezone, ...(context.callId ? { callId: context.callId } : {}) });
+        // Each delegation starts fresh, so the agent often books a time it only
+        // saw in the conversation. Read a time without an offset in the
+        // business's timezone; the server's own timezone would shift it.
+        const start = DateTime.fromISO(input.startsAt, { zone: timezone });
+        if (!start.isValid) return { ok: false, reason: "Give startsAt as YYYY-MM-DDTHH:mm in the business's timezone." };
+        const startsAt = start.toISO()!;
+        const opening = await checkOpening(domain, { businessId, serviceName: input.serviceName, startsAt, timezone, ...(context.callId ? { callId: context.callId } : {}) });
         if (!opening.ok || !opening.available) return { ok: false, reason: "That time is no longer available. Offer another opening." };
         return await bookForCaller(domain, {
           businessId,
           serviceName: input.serviceName,
-          startsAt: input.startsAt,
+          startsAt,
           timezone,
           contactPhone,
           channel,
@@ -223,7 +230,7 @@ export function createReceptionistTools(context: AgentToolContext): ToolSet {
         notes: z.string().optional(),
       }),
       execute: async (input) => {
-        const callbackPhone = input.callbackPhone ?? context.callerPhone;
+        const callbackPhone = input.callbackPhone?.trim() || context.callerPhone;
         if (!callbackPhone) return { ok: false, reason: "Ask for a callback number first." };
         const message = [`Appointment request: ${input.serviceName}`, `Preferred time: ${input.preferredTime}`, input.notes ? `Notes: ${input.notes}` : ""].filter(Boolean).join("\n");
         return await takeMessageForStaff(domain, {

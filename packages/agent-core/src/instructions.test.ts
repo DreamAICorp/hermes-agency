@@ -2,7 +2,7 @@ import { demoSnapshot } from "@lobbystack/shared";
 import { DateTime } from "luxon";
 import { describe, expect, it } from "vitest";
 
-import { buildLiveInstructions } from "./instructions";
+import { buildAgentInstructions, buildLiveInstructions } from "./instructions";
 
 const callStart = DateTime.fromISO("2026-10-01T18:30:00.000Z");
 
@@ -34,9 +34,22 @@ describe("buildLiveInstructions", () => {
     expect(instructions).not.toContain("Service 41");
   });
 
+  it("keeps GPT-Live's waiting line neutral until the backend confirms an action", () => {
+    const instructions = buildLiveInstructions(demoSnapshot, callStart);
+    expect(instructions).toContain("say one short neutral line such as \"One moment.\"");
+    expect(instructions).toContain("Don't say you've booked, saved, sent or confirmed anything until the backend's answer says it's done.");
+  });
+
   it("leaves out hours and services the business hasn't set, so GPT-Live delegates them", () => {
     const instructions = buildLiveInstructions({ ...demoSnapshot, hours: [], services: [] }, callStart);
     expect(instructions).not.toContain("Opening hours");
     expect(instructions).not.toContain("Services:");
+  });
+});
+
+describe("buildAgentInstructions", () => {
+  it("tells the agent not to ask for a number the call already carries", () => {
+    expect(buildAgentInstructions(demoSnapshot, "voice", { callerNumberKnown: true })).toContain("You already have the caller's phone number from the call. Don't ask for it");
+    expect(buildAgentInstructions(demoSnapshot, "web_voice")).not.toContain("You already have the caller's phone number");
   });
 });

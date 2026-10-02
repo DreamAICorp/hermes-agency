@@ -13,9 +13,11 @@
 --      linked to a contact that has since been deleted. They also get
 --      contact_linked_at = now(), so their existing chats are never handed to
 --      whoever the visitor links to next.
---   3. Unassigned conversations of linked visitors get the visitor's contact.
--- Every statement only fills NULL columns, so no conversation that already has
--- a contact is reassigned and running this file again changes nothing.
+-- Existing chats keep the contact_id they have. A visitor linked today may have
+-- belonged to a deleted contact before, on a shared browser, and nothing
+-- records when it was linked, so chats without a contact stay unassigned rather
+-- than risk showing someone else's messages. Both statements only fill NULL
+-- columns, so running this file again changes nothing.
 --
 -- The backfill needs a role that sees every row. Under row-level security the
 -- updates would match nothing, so any other role skips it with a notice.
@@ -28,7 +30,6 @@ DO $$
 DECLARE
   linked integer;
   sealed integer;
-  attributed integer;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND (rolsuper OR rolbypassrls)) THEN
     RAISE NOTICE 'Skipping the website chat contact backfill: % is subject to row-level security.', current_user;
@@ -48,15 +49,6 @@ BEGIN
     AND (email IS NOT NULL OR metadata->>'submittedLead' = 'true');
   GET DIAGNOSTICS sealed = ROW_COUNT;
 
-  UPDATE public.conversations conversation
-  SET contact_id = visitor.contact_id
-  FROM public.widget_visitors visitor
-  WHERE conversation.widget_visitor_id = visitor.id
-    AND conversation.business_id = visitor.business_id
-    AND conversation.contact_id IS NULL
-    AND visitor.contact_id IS NOT NULL;
-  GET DIAGNOSTICS attributed = ROW_COUNT;
-
-  RAISE NOTICE 'Website chat contacts: % linked visitors stamped, % previously linked visitors sealed, % conversations attributed.', linked, sealed, attributed;
+  RAISE NOTICE 'Website chat contacts: % linked visitors stamped, % previously linked visitors sealed.', linked, sealed;
 END
 $$;

@@ -286,7 +286,7 @@ describe.skipIf(!client)("website chat attribution under RLS", () => {
     });
   });
 
-  it("backfills website chat contacts without moving assigned chats, and can run twice", async () => {
+  it("stamps link times without assigning existing chats, and can run twice", async () => {
     await rollbackTest(async (tx) => {
       const [role] = (await tx.execute<{ bypass: boolean }>(sql`select rolsuper or rolbypassrls as bypass from pg_roles where rolname = current_user`)).rows;
       if (!role?.bypass) return; // The migration skips its backfill for roles under RLS.
@@ -312,7 +312,7 @@ describe.skipIf(!client)("website chat attribution under RLS", () => {
       await tx.execute(sql.raw(migration));
 
       const chats = new Map((await tx.select({ id: conversations.id, contactId: conversations.contactId }).from(conversations).where(eq(conversations.businessId, businessId))).map((row) => [row.id, row.contactId]));
-      expect(Object.fromEntries([unassigned, assigned, orphan, anonymousChat].map((id) => [id, chats.get(id)]))).toEqual({ [unassigned]: ana, [assigned]: other, [orphan]: null, [anonymousChat]: null });
+      expect(Object.fromEntries([unassigned, assigned, orphan, anonymousChat].map((id) => [id, chats.get(id)]))).toEqual({ [unassigned]: null, [assigned]: other, [orphan]: null, [anonymousChat]: null });
       const visitors = new Map((await tx.select({ id: widgetVisitors.id, contactLinkedAt: widgetVisitors.contactLinkedAt }).from(widgetVisitors).where(eq(widgetVisitors.businessId, businessId))).map((row) => [row.id, row.contactLinkedAt]));
       expect(visitors.get(linked)).toBeInstanceOf(Date);
       expect(visitors.get(deletedContact)).toBeInstanceOf(Date);

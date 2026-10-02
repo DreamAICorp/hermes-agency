@@ -26,6 +26,14 @@ describe("buildLiveInstructions", () => {
     expect(instructions).toContain("Services:\n- General Checkup (30 min): A routine visit.");
   });
 
+  it("marks a capped services list as partial so GPT-Live delegates the services it can't see", () => {
+    const services = Array.from({ length: 45 }, (_, index) => ({ id: `svc-${index}`, name: `Service ${index + 1}`, durationMinutes: 30 }));
+    const instructions = buildLiveInstructions({ ...demoSnapshot, services }, callStart);
+    expect(instructions).toContain("Services (the first 40 of 45; delegate questions about any service not listed):\n- Service 1 (30 min)");
+    expect(instructions).toContain("- Service 40 (30 min)");
+    expect(instructions).not.toContain("Service 41");
+  });
+
   it("leaves out hours and services the business hasn't set, so GPT-Live delegates them", () => {
     const instructions = buildLiveInstructions({ ...demoSnapshot, hours: [], services: [] }, callStart);
     expect(instructions).not.toContain("Opening hours");

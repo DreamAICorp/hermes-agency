@@ -62,12 +62,17 @@ const LIVE_MAX_CLOSURES = 5;
 function liveBusinessFacts(snapshot: BusinessContextSnapshot, now: DateTime): string[] {
   const timezone = snapshot.timezone;
   const closures = upcomingClosures(snapshot, now).slice(0, LIVE_MAX_CLOSURES);
-  const services = serviceFacts(snapshot).slice(0, LIVE_MAX_SERVICES);
+  const allServices = serviceFacts(snapshot);
+  const services = allServices.slice(0, LIVE_MAX_SERVICES);
+  // A partial list must say so, or GPT-Live would deny a service it can't see.
+  const servicesHeading = services.length < allServices.length
+    ? `Services (the first ${services.length} of ${allServices.length}; delegate questions about any service not listed):`
+    : "Services:";
   return [
     `The call started on ${now.toFormat("cccc, LLLL d, yyyy, 'at' h:mm a")} (${timezone}).`,
     snapshot.hours.length ? `Opening hours (${timezone}):\n${weeklyHours(snapshot).join("\n")}` : "",
     closures.length ? `Upcoming closures: ${closures.map((closure) => describeClosure(closure, timezone)).join("; ")}.` : "",
-    services.length ? `Services:\n${describeServices(services, LIVE_SERVICES_MAX_CHARS)}` : "",
+    services.length ? `${servicesHeading}\n${describeServices(services, LIVE_SERVICES_MAX_CHARS)}` : "",
   ].filter(Boolean);
 }
 

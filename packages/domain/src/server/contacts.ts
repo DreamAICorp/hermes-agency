@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 
 import { appointments, calls, contacts, conversations, enqueueOutbox, messages, services, staff, withBusinessTransaction } from "@lobbystack/db";
 
@@ -22,6 +22,19 @@ function contactChannelsSql(businessId: string) {
   )`;
 }
 
+/**
+ * A contact's conversation ids: conversations linked to the contact directly,
+ * plus website chats from a widget visitor linked to the contact. `union`
+ * keeps a conversation reachable both ways from counting twice.
+ */
+function contactConversationIdsSql(businessId: string, contactId: SQL) {
+  return sql`(
+    select "owned_conversations"."id" from "conversations" as "owned_conversations" where "owned_conversations"."business_id" = ${businessId} and "owned_conversations"."contact_id" = ${contactId}
+    union
+    select "visitor_conversations"."id" from "conversations" as "visitor_conversations" inner join "widget_visitors" as "conversation_visitors" on "conversation_visitors"."id" = "visitor_conversations"."widget_visitor_id" and "conversation_visitors"."business_id" = ${businessId} where "conversation_visitors"."contact_id" = ${contactId} and "visitor_conversations"."business_id" = ${businessId}
+  )`;
+}
+
 export async function listContacts(
   context: DomainContext,
   input: { userId: string; businessId: string; search?: string; limit?: number; offset?: number },
@@ -32,11 +45,12 @@ export async function listContacts(
     const offset = Math.max(Math.trunc(input.offset ?? 0), 0);
     const search = input.search?.trim();
     const filter = and(eq(contacts.businessId, input.businessId), ...(search ? [or(ilike(contacts.name, `%${search}%`), ilike(contacts.phone, `%${search}%`), ilike(contacts.email, `%${search}%`))!] : []));
+    const contactConversationIds = contactConversationIdsSql(input.businessId, sql`"contacts"."id"`);
     // Match the original contact activity order; profile edits are not interactions.
     const lastInteractionAt = sql<Date>`greatest(
       ${contacts.createdAt},
       (select max("activity_calls"."started_at") from "calls" as "activity_calls" where "activity_calls"."contact_id" = "contacts"."id" and "activity_calls"."business_id" = ${input.businessId}),
-      (select max("activity_messages"."created_at") from "messages" as "activity_messages" inner join "conversations" as "activity_conversations" on "activity_conversations"."id" = "activity_messages"."conversation_id" where "activity_conversations"."contact_id" = "contacts"."id" and "activity_messages"."business_id" = ${input.businessId}),
+      (select max("activity_messages"."created_at") from "messages" as "activity_messages" where "activity_messages"."business_id" = ${input.businessId} and "activity_messages"."conversation_id" in ${contactConversationIds}),
       (select max("activity_appointments"."starts_at") from "appointments" as "activity_appointments" where "activity_appointments"."contact_id" = "contacts"."id" and "activity_appointments"."business_id" = ${input.businessId} and "activity_appointments"."starts_at" <= now())
     )`;
     const [rows, total] = await Promise.all([
@@ -55,7 +69,7 @@ export async function listContacts(
         updatedAt: contacts.updatedAt,
         lastInteractionAt,
         callCount: sql<number>`(select count(*) from "calls" as "contact_calls" where "contact_calls"."contact_id" = "contacts"."id" and "contact_calls"."business_id" = ${input.businessId})`,
-        messageCount: sql<number>`(select count(*) from "messages" as "contact_messages" inner join "conversations" as "contact_conversations" on "contact_conversations"."id" = "contact_messages"."conversation_id" where "contact_conversations"."contact_id" = "contacts"."id" and "contact_messages"."business_id" = ${input.businessId})`,
+        messageCount: sql<number>`(select count(*) from "messages" as "contact_messages" where "contact_messages"."business_id" = ${input.businessId} and "contact_messages"."conversation_id" in ${contactConversationIds})`,
         appointmentCount: sql<number>`(select count(*) from "appointments" as "contact_appointments" where "contact_appointments"."contact_id" = "contacts"."id" and "contact_appointments"."business_id" = ${input.businessId})`,
         channels: contactChannelsSql(input.businessId),
       }).from(contacts).where(filter).orderBy(desc(lastInteractionAt), asc(contacts.id)).limit(limit + 1).offset(offset),
@@ -74,14 +88,16 @@ export async function getContactDetail(
     const found = (await tx.select({ contact: contacts, channels: contactChannelsSql(input.businessId) }).from(contacts).where(and(eq(contacts.id, input.contactId), eq(contacts.businessId, input.businessId))).limit(1))[0];
     if (!found) return { contact: null, channels: [], calls: [], messages: [], appointments: [], activityCounts: { calls: 0, messages: 0, appointments: 0, conversations: 0 } };
     const { contact, channels } = found;
+    const contactConversationIds = contactConversationIdsSql(input.businessId, sql`${input.contactId}::uuid`);
+    const contactMessages = and(eq(messages.businessId, input.businessId), sql`${messages.conversationId} in ${contactConversationIds}`);
     const [recentCalls, recentMessages, recentAppointments, callCount, messageCount, appointmentCount, conversationCount] = await Promise.all([
       tx.select({ id: calls.id, status: calls.status, disposition: calls.disposition, transport: calls.transport, startedAt: calls.startedAt, endedAt: calls.endedAt, providerDurationSeconds: calls.providerDurationSeconds }).from(calls).where(and(eq(calls.businessId, input.businessId), eq(calls.contactId, input.contactId))).orderBy(desc(calls.startedAt)).limit(25),
-      tx.select({ id: messages.id, conversationId: messages.conversationId, direction: messages.direction, channel: messages.channel, body: messages.body, status: messages.status, createdAt: messages.createdAt }).from(messages).innerJoin(conversations, and(eq(conversations.id, messages.conversationId), eq(conversations.businessId, input.businessId), eq(conversations.contactId, input.contactId))).where(eq(messages.businessId, input.businessId)).orderBy(desc(messages.createdAt)).limit(50),
+      tx.select({ id: messages.id, conversationId: messages.conversationId, direction: messages.direction, channel: messages.channel, body: messages.body, status: messages.status, createdAt: messages.createdAt }).from(messages).where(contactMessages).orderBy(desc(messages.createdAt)).limit(50),
       tx.select({ id: appointments.id, startsAt: appointments.startsAt, endsAt: appointments.endsAt, timezone: appointments.timezone, status: appointments.status, sourceChannel: appointments.sourceChannel, calendarSyncState: appointments.calendarSyncState, serviceName: services.name, staffName: staff.name }).from(appointments).innerJoin(services, and(eq(services.id, appointments.serviceId), eq(services.businessId, input.businessId))).innerJoin(staff, and(eq(staff.id, appointments.staffId), eq(staff.businessId, input.businessId))).where(and(eq(appointments.businessId, input.businessId), eq(appointments.contactId, input.contactId))).orderBy(desc(appointments.startsAt)).limit(25),
       tx.select({ count: count() }).from(calls).where(and(eq(calls.businessId, input.businessId), eq(calls.contactId, input.contactId))),
-      tx.select({ count: count() }).from(messages).innerJoin(conversations, and(eq(conversations.id, messages.conversationId), eq(conversations.businessId, input.businessId), eq(conversations.contactId, input.contactId))).where(eq(messages.businessId, input.businessId)),
+      tx.select({ count: count() }).from(messages).where(contactMessages),
       tx.select({ count: count() }).from(appointments).where(and(eq(appointments.businessId, input.businessId), eq(appointments.contactId, input.contactId))),
-      tx.select({ count: count() }).from(conversations).where(and(eq(conversations.businessId, input.businessId), eq(conversations.contactId, input.contactId))),
+      tx.select({ count: count() }).from(conversations).where(and(eq(conversations.businessId, input.businessId), sql`${conversations.id} in ${contactConversationIds}`)),
     ]);
     return { contact, channels, calls: recentCalls, messages: recentMessages, appointments: recentAppointments, activityCounts: { calls: Number(callCount[0]?.count ?? 0), messages: Number(messageCount[0]?.count ?? 0), appointments: Number(appointmentCount[0]?.count ?? 0), conversations: Number(conversationCount[0]?.count ?? 0) } };
   });

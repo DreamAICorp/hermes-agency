@@ -1,4 +1,4 @@
-import { normalizeBookingMode, type BookingMode, type BusinessContextSnapshot } from "@lobbystack/shared";
+import { canTextNumber, normalizeBookingMode, type BookingMode, type BusinessContextSnapshot } from "@lobbystack/shared";
 import { DateTime } from "luxon";
 
 import { describeClosure, describeServices, serviceFacts, upcomingClosures, weeklyHours } from "./businessFacts";
@@ -25,7 +25,7 @@ const BOOKING_GUIDANCE: Record<BookingMode, string> = {
 
 // Instructions for the text agent that does the work. On voice it runs behind
 // GPT-Live, so its reply is spoken to the caller by the live model.
-export function buildAgentInstructions(snapshot: BusinessContextSnapshot, channel: AgentChannel, options: { intakeOnly?: boolean; callerNumberKnown?: boolean } = {}): string {
+export function buildAgentInstructions(snapshot: BusinessContextSnapshot, channel: AgentChannel, options: { intakeOnly?: boolean; callerPhone?: string } = {}): string {
   const now = DateTime.now().setZone(snapshot.timezone);
   const bookingMode = normalizeBookingMode(snapshot.bookingMode);
   const voice = channel !== "web_chat";
@@ -40,11 +40,13 @@ export function buildAgentInstructions(snapshot: BusinessContextSnapshot, channe
     options.intakeOnly
       ? "This is a demo of the receptionist. Answer questions and take messages only. Don't book or check appointments, don't transfer the call, and don't promise texts or emails."
       : BOOKING_GUIDANCE[bookingMode],
-    channel === "voice" && bookingMode === "instant"
-      ? "On a phone call, ask together with the time you offer: \"Can I text this number with your appointment confirmation and a reminder?\" Pass their answer as smsConsentGranted."
+    channel === "voice" && bookingMode === "instant" && !options.intakeOnly
+      ? canTextNumber(snapshot.contactChannels?.smsNumber, options.callerPhone)
+        ? "On a phone call, ask together with the time you offer: \"Can I text this number with your appointment confirmation and a reminder?\" Pass their answer as smsConsentGranted."
+        : "This business can't text the caller's number, so don't offer a text confirmation or reminder. Pass smsConsentGranted as false."
       : "",
     "Work out relative dates yourself (\"tomorrow\", \"next Tuesday\") from the current date below; never ask the caller for a calendar date they already described. Treat \"morning\" as 09:00 and \"afternoon\" as 13:00.",
-    options.callerNumberKnown
+    options.callerPhone
       ? "You already have the caller's phone number from the call. Don't ask for it, and leave contactPhone and callbackPhone empty unless the caller gives a different number."
       : "",
     "If you are missing something you need (the service, the caller's name or number), say exactly what to ask the caller.",

@@ -49,7 +49,15 @@ describe("buildLiveInstructions", () => {
 
 describe("buildAgentInstructions", () => {
   it("tells the agent not to ask for a number the call already carries", () => {
-    expect(buildAgentInstructions(demoSnapshot, "voice", { callerNumberKnown: true })).toContain("You already have the caller's phone number from the call. Don't ask for it");
+    expect(buildAgentInstructions(demoSnapshot, "voice", { callerPhone: "+14165550134" })).toContain("You already have the caller's phone number from the call. Don't ask for it");
     expect(buildAgentInstructions(demoSnapshot, "web_voice")).not.toContain("You already have the caller's phone number");
+  });
+
+  it("offers a text confirmation only when the business can text the caller", () => {
+    const tollFree = { ...demoSnapshot, contactChannels: { smsNumber: "+18445550100" } };
+    expect(buildAgentInstructions(tollFree, "voice", { callerPhone: "+14165550134" })).toContain("Can I text this number with your appointment confirmation and a reminder?");
+    const abroad = buildAgentInstructions(tollFree, "voice", { callerPhone: "+381695021111" });
+    expect(abroad).toContain("This business can't text the caller's number");
+    expect(abroad).not.toContain("Can I text this number");
   });
 });

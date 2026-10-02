@@ -15,7 +15,7 @@ import {
   verifyCallerForChange,
   type DomainContext,
 } from "@lobbystack/domain";
-import { isTransferPermitted, normalizeAppointmentChangePolicy, normalizeBookingMode, type BusinessContextSnapshot } from "@lobbystack/shared";
+import { canTextNumber, isTransferPermitted, normalizeAppointmentChangePolicy, normalizeBookingMode, type BusinessContextSnapshot } from "@lobbystack/shared";
 import { tool, type ToolSet } from "ai";
 import { DateTime } from "luxon";
 import { z } from "zod";
@@ -204,17 +204,22 @@ export function createReceptionistTools(context: AgentToolContext): ToolSet {
         const startsAt = start.toISO()!;
         const opening = await checkOpening(domain, { businessId, serviceName: input.serviceName, startsAt, timezone, ...(context.callId ? { callId: context.callId } : {}) });
         if (!opening.ok || !opening.available) return { ok: false, reason: "That time is no longer available. Offer another opening." };
-        return await bookForCaller(domain, {
+        const textable = canTextNumber(snapshot.contactChannels?.smsNumber, contactPhone);
+        const booked = await bookForCaller(domain, {
           businessId,
           serviceName: input.serviceName,
           startsAt,
           timezone,
           contactPhone,
           channel,
-          smsConsentGranted: input.smsConsentGranted,
+          smsConsentGranted: input.smsConsentGranted && textable,
           ...(input.contactName ? { contactName: input.contactName } : {}),
           ...(context.callId ? { callId: context.callId } : {}),
         });
+        // The caller agreed to a text this business can't send them.
+        return booked.ok && input.smsConsentGranted && !textable
+          ? { ...booked, textConfirmation: "This business can't text that number. Tell the caller they won't get a text confirmation." }
+          : booked;
       },
     });
   }

@@ -105,6 +105,13 @@ describe("bookAppointment", () => {
     expect(vi.mocked(bookForCaller).mock.lastCall?.[1]).toMatchObject({ contactPhone: "+14165550100" });
   });
 
+  it("books without text consent when the business can't text the number, and says so", async () => {
+    const tools = createReceptionistTools({ domain: { db: {} as never }, channel: "web_voice", snapshot: { ...demoSnapshot, contactChannels: { smsNumber: "+18445550100" } } });
+    const execute = tools.bookAppointment!.execute! as (input: object, options: object) => Promise<unknown>;
+    await expect(execute({ serviceName: "General Checkup", startsAt: "2026-10-06T10:00", contactName: "Milan", contactPhone: "+381695021111", smsConsentGranted: true }, { toolCallId: "1", messages: [] })).resolves.toMatchObject({ ok: true, textConfirmation: expect.stringContaining("won't get a text") });
+    expect(vi.mocked(bookForCaller).mock.lastCall?.[1]).toMatchObject({ contactPhone: "+381695021111", smsConsentGranted: false });
+  });
+
   it("asks for the caller's name before booking", async () => {
     vi.mocked(bookForCaller).mockClear();
     const tools = createReceptionistTools({ domain: { db: {} as never }, channel: "voice", callerPhone: "+14165550100", snapshot: demoSnapshot });

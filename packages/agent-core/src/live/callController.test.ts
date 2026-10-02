@@ -19,7 +19,7 @@ vi.mock("openai/resources/live/sideband/ws", () => ({
 import { LiveCallController, type LiveCallSummary, type LiveCallTurn } from "./callController";
 
 function setup(options: { silenceTimeoutMs?: number } = {}) {
-  const generate = vi.fn(async () => ({ text: "We're open until 5.", steps: [{ toolCalls: [{ toolName: "getBusinessHours" }] }] }));
+  const generate = vi.fn(async () => ({ text: "We're open until 5.", steps: [{ toolCalls: [{ toolCallId: "call_1", toolName: "getBusinessHours" }], toolResults: [] }, { toolCalls: [], toolResults: [] }] }));
   const turns: LiveCallTurn[] = [];
   const closed: LiveCallSummary[] = [];
   const onTimeout = vi.fn();

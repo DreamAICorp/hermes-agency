@@ -20,6 +20,8 @@ import { tool, type ToolSet } from "ai";
 import { DateTime } from "luxon";
 import { z } from "zod";
 
+import { serviceFacts, upcomingClosures, weeklyHours } from "./businessFacts";
+
 /** Where the conversation happens. Phone calls know the caller's number. */
 export type AgentChannel = "voice" | "web_voice" | "web_chat";
 
@@ -42,12 +44,6 @@ export type AgentToolContext = {
   /** Prospect demos only answer questions and take messages: no booking, no transfers. */
   intakeOnly?: boolean;
 };
-
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-function formatMinutes(minutes: number): string {
-  return DateTime.fromObject({ hour: Math.floor(minutes / 60), minute: minutes % 60 }).toFormat("h:mm a");
-}
 
 // A plural always counts ("fee" finds "fees"). Other endings only count for terms of four
 // or more letters and at most three extra letters ("park" finds "parking"), so "car"
@@ -111,13 +107,8 @@ export function createReceptionistTools(context: AgentToolContext): ToolSet {
           now: now.toFormat("cccc h:mm a"),
           openNow,
           configured: snapshot.hours.length > 0,
-          weekly: DAY_NAMES.map((day, index) => {
-            const windows = snapshot.hours.filter((window) => window.dayOfWeek === index);
-            return `${day}: ${windows.length ? windows.map((window) => `${formatMinutes(window.openMinutes)} to ${formatMinutes(window.closeMinutes)}`).join(", ") : "closed"}`;
-          }),
-          upcomingClosures: snapshot.closures
-            .filter((closure) => DateTime.fromISO(closure.endsAt) > now)
-            .map((closure) => ({ from: closure.startsAt, to: closure.endsAt, reason: closure.reason })),
+          weekly: weeklyHours(snapshot),
+          upcomingClosures: upcomingClosures(snapshot, now),
         };
       },
     }),
@@ -125,9 +116,7 @@ export function createReceptionistTools(context: AgentToolContext): ToolSet {
     getBusinessServices: tool({
       description: "List the services the business offers, with duration and a short description.",
       inputSchema: z.object({}),
-      execute: async () => ({
-        services: snapshot.services.map((service) => ({ name: service.name, durationMinutes: service.durationMinutes, ...(service.description ? { description: service.description } : {}) })),
-      }),
+      execute: async () => ({ services: serviceFacts(snapshot) }),
     }),
 
     searchKnowledge: tool({

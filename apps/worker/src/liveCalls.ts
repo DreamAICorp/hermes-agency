@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-import { createAgentModel, createReceptionistAgent, LiveCallController, type AgentChannel, type CallControl, type LiveCallSummary } from "@lobbystack/agent-core";
+import { createAgentModel, createReceptionistAgent, LiveCallController, liveDelegationEnvironment, type AgentChannel, type CallControl, type LiveCallSummary } from "@lobbystack/agent-core";
 import {
   blockLiveCaller,
   finishLiveCall,
@@ -132,7 +132,9 @@ export function createLiveCallHandler(input: { domain: DomainContext }) {
   // Call records still being finalized, so shutdown can wait for them.
   const finishing = new Set<Promise<void>>();
   const client = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY, maxRetries: 0 }) : undefined;
-  const model = createAgentModel();
+  // The caller waits in silence while the agent works, so delegation runs on
+  // its own reasoning effort (low unless AI_DELEGATION_* says otherwise).
+  const model = createAgentModel(liveDelegationEnvironment());
   // The dashboard's live-call count trusts a call only while its owner renews
   // this id, so a crashed worker's calls stop counting.
   const presenceOwner = `worker:${randomUUID()}`;
@@ -236,6 +238,7 @@ export function createLiveCallHandler(input: { domain: DomainContext }) {
         ...(request.callerPhone ? { callerPhone: request.callerPhone } : {}),
         ...(request.intakeOnly ? { intakeOnly: true } : {}),
       },
+      directToolAnswers: true,
     });
 
     const finish = async (summary: LiveCallSummary) => {
@@ -264,7 +267,7 @@ export function createLiveCallHandler(input: { domain: DomainContext }) {
         void hangup();
       },
       onDelegation: (timing) => {
-        console.info(JSON.stringify({ event: "live.delegation", sessionId: request.sessionId, agentMs: timing.agentMs, totalMs: timing.totalMs, tools: timing.tools, failed: timing.failed }));
+        console.info(JSON.stringify({ event: "live.delegation", sessionId: request.sessionId, agentMs: timing.agentMs, totalMs: timing.totalMs, tools: timing.tools, modelSteps: timing.modelSteps, directAnswer: timing.directAnswer, failed: timing.failed }));
         recordLiveDelegation(input.domain, telemetryCall, timing);
       },
       onClose: (summary) => {

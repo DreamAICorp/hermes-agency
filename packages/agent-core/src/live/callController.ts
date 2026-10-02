@@ -3,6 +3,7 @@ import type { DelegationCreatedEvent } from "openai/resources/live/live";
 import { SidebandWS } from "openai/resources/live/sideband/ws";
 
 import type { ReceptionistAgent } from "../agent";
+import { directToolAnswer } from "./directAnswer";
 import { LiveLatencyTracker, type LiveCallLatency } from "./latency";
 
 type Turn = { role: "caller" | "receptionist"; text: string; endMs: number };
@@ -14,6 +15,10 @@ export type DelegationTiming = {
   agentMs: number;
   totalMs: number;
   tools: string[];
+  /** Model calls the agent made. A direct tool answer saves the last one. */
+  modelSteps: number;
+  /** The answer came straight from a tool result, with no model step to phrase it. */
+  directAnswer: boolean;
   answer: string;
   failed: boolean;
 };
@@ -236,6 +241,8 @@ export class LiveCallController {
 
     let answer = FALLBACK_ANSWER;
     let tools: string[] = [];
+    let modelSteps = 0;
+    let directAnswer = false;
     let failed = false;
     try {
       const result = await this.options.agent.generate({
@@ -243,7 +250,13 @@ export class LiveCallController {
         abortSignal: this.abort.signal,
       });
       tools = result.steps.flatMap((step) => step.toolCalls.map((call) => call.toolName));
-      if (result.text.trim()) answer = result.text.trim().slice(0, MAX_ANSWER_CHARS);
+      modelSteps = result.steps.length;
+      // When the loop stopped on a tool GPT-Live can speak from directly, the
+      // last step has no text of its own.
+      const direct = directToolAnswer(result.steps.at(-1));
+      directAnswer = direct !== undefined;
+      const text = direct ?? result.text.trim();
+      if (text) answer = text.slice(0, MAX_ANSWER_CHARS);
     } catch (error) {
       failed = true;
       if (this.abort.signal.aborted) return;
@@ -260,6 +273,8 @@ export class LiveCallController {
       agentMs: Math.round(answeredAt - transcriptReadyAt),
       totalMs: Math.round(answeredAt - receivedAt),
       tools,
+      modelSteps,
+      directAnswer,
       answer,
       failed,
     };

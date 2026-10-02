@@ -101,7 +101,7 @@ function makeTx(overrides: { visitor?: Row | null; conversations?: Row[]; messag
         if (name === "widget_visitors") state.insertedVisitor = values;
         if (name === "contacts") state.insertedContact = values;
         const base = {
-          onConflictDoUpdate: () => ({ run: () => Promise.resolve() }),
+          onConflictDoUpdate: () => ({ run: () => Promise.resolve(), returning: () => Promise.resolve([{ contactId: values.contactId ?? null, contactLinkedAt: null }]) }),
           onConflictDoNothing: () => Object.assign(Promise.resolve([] as Row[]), { returning: () => Promise.resolve([{ id: conversationId }]) }),
           returning: () => Promise.resolve([{ id: conversationId }]),
         };

@@ -246,7 +246,34 @@ export async function registerWidgetVisitor(
         ));
       }
     } else {
-      await tx.insert(widgetVisitors).values({ id: input.visitorId, businessId: input.businessId, ...(input.name ? { name: input.name } : {}), ...(input.email !== undefined ? { email: input.email } : {}), metadata: mergedMetadata, ...(contactId ? { contactId, contactLinkedAt: sql`now()` } : {}), lastSeenAt: new Date(), updatedAt: new Date() }).onConflictDoUpdate({ target: widgetVisitors.id, set: { ...(input.name ? { name: input.name } : {}), ...(input.email !== undefined ? { email: input.email } : {}), metadata: mergedMetadata, lastSeenAt: new Date(), updatedAt: new Date() } });
+      // A concurrent first registration can insert the visitor between our read
+      // and this insert. The conflict update then links the contact itself, so
+      // an anonymous insert winning the race can't drop the link.
+      const [visitor] = await tx.insert(widgetVisitors).values({ id: input.visitorId, businessId: input.businessId, ...(input.name ? { name: input.name } : {}), ...(input.email !== undefined ? { email: input.email } : {}), metadata: mergedMetadata, ...(contactId ? { contactId, contactLinkedAt: sql`now()` } : {}), lastSeenAt: new Date(), updatedAt: new Date() }).onConflictDoUpdate({
+        target: widgetVisitors.id,
+        set: {
+          ...(input.name ? { name: input.name } : {}),
+          ...(input.email !== undefined ? { email: input.email } : {}),
+          metadata: mergedMetadata,
+          ...(contactId ? {
+            contactId: sql`coalesce(${widgetVisitors.contactId}, excluded.contact_id)`,
+            contactLinkedAt: sql`case when ${widgetVisitors.contactId} is null then now() else ${widgetVisitors.contactLinkedAt} end`,
+          } : {}),
+          lastSeenAt: new Date(),
+          updatedAt: new Date(),
+        },
+      }).returning({ contactId: widgetVisitors.contactId, contactLinkedAt: widgetVisitors.contactLinkedAt });
+      if (visitor?.contactId && visitor.contactId !== contactId) {
+        // The other registration linked the visitor first; keep its contact.
+        contactId = visitor.contactId;
+      } else if (contactId) {
+        // Chats the racing registration started belong to this contact.
+        await tx.update(conversations).set({ contactId }).where(and(
+          eq(conversations.businessId, input.businessId),
+          eq(conversations.widgetVisitorId, input.visitorId),
+          isNull(conversations.contactId),
+        ));
+      }
     }
     return { visitorId: input.visitorId, contactId };
   });

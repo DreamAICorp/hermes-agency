@@ -235,4 +235,26 @@ describe.skipIf(!testUrl)("prospect demo operator membership against dedicated P
       expect(await businessRows()).toEqual(businessesBefore);
     });
   });
+
+  it("clears an operator's active workspace on a demo someone claimed before the fix", async () => {
+    await rollbackTest(async (tx) => {
+      const { operatorUserId, ownBusinessId } = await operatorWithWorkspace(tx);
+      const claimantUserId = await insertUser(tx);
+      const claimed = await createDemo(tx, operatorUserId);
+
+      // The old claim path removed the operator's membership but kept its active business.
+      await tx.update(prospectDemos).set({ status: "claimed", claimedAt: new Date(), claimedByUserId: claimantUserId }).where(eq(prospectDemos.id, claimed.demoId));
+      await tx.delete(businessMemberships).where(and(eq(businessMemberships.businessId, claimed.businessId), eq(businessMemberships.userId, operatorUserId)));
+      await tx.insert(businessMemberships).values({ businessId: claimed.businessId, userId: claimantUserId, role: "business_owner", status: "active" });
+      await tx.update(users).set({ activeBusinessId: claimed.businessId }).where(inArray(users.id, [operatorUserId, claimantUserId]));
+
+      const repair = await readFile(cleanupMigration, "utf8");
+      await tx.execute(sql.raw(repair));
+
+      expect(await activeBusinessId(tx, operatorUserId)).toBeNull();
+      expect(await activeBusinessId(tx, claimantUserId)).toBe(claimed.businessId);
+      expect(await membership(tx, claimed.businessId, claimantUserId)).toMatchObject({ status: "active" });
+      expect(await membership(tx, ownBusinessId, operatorUserId)).toMatchObject({ status: "active" });
+    });
+  });
 });

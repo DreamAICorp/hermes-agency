@@ -79,7 +79,8 @@ function makeTx(overrides: { visitor?: Row | null; conversations?: Row[]; messag
         const rows = resultsFor(name);
         const hasOrderByLimit = name === "conversations" || name === "messages";
         const terminal = Object.assign(Promise.resolve(rows), {
-          limit: () => Promise.resolve(rows),
+          // Locking reads (`.for("update")`, `.for("share")`) return the same rows.
+          limit: () => Object.assign(Promise.resolve(rows), { for: () => Promise.resolve(rows) }),
           orderBy: () => (hasOrderByLimit ? Object.assign(Promise.resolve(rows), { limit: () => Promise.resolve(rows) }) : Promise.resolve(rows)),
           innerJoin: (joinTable: unknown) => ({
             where: () => {

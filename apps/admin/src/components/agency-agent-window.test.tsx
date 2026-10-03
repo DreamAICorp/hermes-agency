@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
+import { findAgencyAgent } from "@/lib/agency-agents";
 import { AgencyAgentWindow } from "./agency-agent-window";
 const t = (key: string) => key;
 vi.mock("react-i18next", () => ({ useTranslation: () => ({ t }) }));
@@ -32,4 +34,29 @@ describe("company-scoped embedded chat",()=>{
   await waitFor(()=>expect(screen.getByRole("status").textContent).toBe("provisioning"));
   expect(view.container.querySelector("iframe")).toBeNull();
  });
+ it("keeps the iframe and selected profile when the embedded chat changes agents",async()=>{
+  vi.stubGlobal("fetch",vi.fn().mockResolvedValue(Response.json({businessId:"company-one",origin:"https://chat.example",token:"fixture"})));
+  function Fixture(){
+   const [active,setActive]=useState(findAgencyAgent("sona")!);
+   return <AgencyAgentWindow agent={agent} activeAgent={active} businessId="company-one" onActiveAgentChange={id=>setActive(findAgencyAgent(id)!)}/>;
+  }
+  const view=render(<Fixture/>);
+  await waitFor(()=>expect(view.container.querySelector("iframe")).not.toBeNull());
+  const iframe=view.container.querySelector("iframe")!;
+  const source=iframe.contentWindow!;
+  const originalUrl=iframe.getAttribute("src");
+  const post=vi.spyOn(source,"postMessage");
+  const select=(origin:string,eventSource:Window|null,id:string)=>act(()=>window.dispatchEvent(new MessageEvent("message",{origin,source:eventSource,data:{type:"hermes-agent-selected",agentId:id}})));
+  select("https://untrusted.example",source,"product");
+  select("https://chat.example",window,"product");
+  select("https://chat.example",source,"unknown");
+  expect(screen.getByRole("heading",{name:"Sona"})).toBeTruthy();
+  select("https://chat.example",source,"product");
+  expect(screen.getByRole("heading",{name:"Product"})).toBeTruthy();
+  expect(view.container.querySelector("iframe")).toBe(iframe);
+  expect(iframe.getAttribute("src")).toBe(originalUrl);
+  act(()=>window.dispatchEvent(new MessageEvent("message",{origin:"https://chat.example",source,data:{type:"hermes-embed-ready"}})));
+  expect(post).toHaveBeenLastCalledWith({type:"4u-hermes-embed-auth",token:"fixture",agentId:"product"},"https://chat.example");
+ });
+
 });

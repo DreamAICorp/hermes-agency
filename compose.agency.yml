@@ -1,7 +1,7 @@
 name: hermes-agency-ui
 services:
   agency:
-    image: 4u/hermes-agency:20261002-tenant-sso-v1
+    image: 4u/hermes-agency:20261003-profile-sync-v1
     container_name: hermes-agency-ui
     restart: unless-stopped
     network_mode: host
